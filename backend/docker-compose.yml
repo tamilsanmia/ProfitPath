@@ -1,0 +1,76 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: profitpath-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      BACKEND_APP_NAME: ${BACKEND_APP_NAME:-ProfitPath Backend}
+      BACKEND_DOCKER_SOCKET: ${BACKEND_DOCKER_SOCKET:-unix://var/run/docker.sock}
+      BACKEND_POSTGRES_URL: ${BACKEND_POSTGRES_URL:-postgresql://postgres:postgres@postgres:5432/profitpath}
+      BACKEND_REDIS_URL: ${BACKEND_REDIS_URL:-redis://redis:6379/0}
+      BACKEND_FRONTEND_URL: ${BACKEND_FRONTEND_URL:-http://localhost:3000}
+      BACKEND_GOOGLE_CLIENT_ID: ${BACKEND_GOOGLE_CLIENT_ID:-}
+      BACKEND_SMTP_HOST: ${BACKEND_SMTP_HOST:-mailpit}
+      BACKEND_SMTP_PORT: ${BACKEND_SMTP_PORT:-1025}
+      BACKEND_SMTP_USER: ${BACKEND_SMTP_USER:-}
+      BACKEND_SMTP_PASSWORD: ${BACKEND_SMTP_PASSWORD:-}
+      BACKEND_SMTP_FROM: ${BACKEND_SMTP_FROM:-no-reply@profitpath.local}
+      BACKEND_SMTP_STARTTLS: ${BACKEND_SMTP_STARTTLS:-false}
+      BACKEND_SMTP_SSL: ${BACKEND_SMTP_SSL:-false}
+      BACKEND_RESET_TOKEN_TTL_MINUTES: ${BACKEND_RESET_TOKEN_TTL_MINUTES:-30}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./storage/profile-pictures:/app/storage/profile-pictures
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: profitpath-postgres
+    environment:
+      POSTGRES_DB: profitpath
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d profitpath"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: profitpath-redis
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: profitpath-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
