@@ -50,6 +50,21 @@ function detectBrowserTimezone(): string {
   }
 }
 
+type ThemePreference = "light" | "dark" | "system"
+
+function getStoredThemePreference(): ThemePreference | null {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  const raw = window.localStorage.getItem("theme")
+  if (raw === "light" || raw === "dark" || raw === "system") {
+    return raw
+  }
+
+  return null
+}
+
 function getTimezonePreferenceKey(email?: string): string {
   return `pp_timezone_user_set:${email ?? "guest"}`
 }
@@ -78,17 +93,18 @@ function applyAppearanceToDocument(appearance: AppearanceSettings): void {
   const root = document.documentElement
   const body = document.body
 
+  const storedTheme = getStoredThemePreference()
+  const preferredTheme: ThemePreference = storedTheme ?? appearance.theme
+
   root.classList.remove("light", "dark")
-  if (appearance.theme === "light" || appearance.theme === "dark") {
-    root.classList.add(appearance.theme)
-    root.setAttribute("data-theme", appearance.theme)
-    window.localStorage.setItem("theme", appearance.theme)
+  if (preferredTheme === "light" || preferredTheme === "dark") {
+    root.classList.add(preferredTheme)
+    root.setAttribute("data-theme", preferredTheme)
   } else {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
     const resolvedTheme = prefersDark ? "dark" : "light"
     root.classList.add(resolvedTheme)
     root.setAttribute("data-theme", "system")
-    window.localStorage.setItem("theme", "system")
   }
 
   root.lang = appearance.language || "en"
@@ -337,6 +353,10 @@ export const useSettings = () => {
   const updateAppearance = useCallback((updates: Partial<AppearanceSettings>) => {
     if (typeof updates.timezone === "string" && updates.timezone.trim()) {
       markUserExplicitTimezonePreference(sessionEmail)
+    }
+
+    if (typeof updates.theme === "string" && (updates.theme === "light" || updates.theme === "dark" || updates.theme === "system")) {
+      window.localStorage.setItem("theme", updates.theme)
     }
 
     setSettings((prev) => ({

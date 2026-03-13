@@ -120,11 +120,11 @@ const mockPages: SearchItem[] = [
     href: "/portfolio-tracker",
   },
   {
-    id: "analytics",
+    id: "my-bots",
     title: "My Bots",
     description: "Manage your purchased bots",
     category: "Page",
-    href: "/my-analytics",
+    href: "/my-bots",
   },
   {
     id: "defi",

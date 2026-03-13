@@ -1,6 +1,7 @@
 from typing import Any
 import re
 import json
+from uuid import uuid4
 
 import psycopg
 from psycopg.rows import dict_row
@@ -164,6 +165,17 @@ def init_db() -> None:
                     device TEXT,
                     success BOOLEAN NOT NULL,
                     method TEXT NOT NULL
+                )
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bot_shares (
+                    bot_id TEXT PRIMARY KEY,
+                    share_token TEXT NOT NULL UNIQUE,
+                    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
                 """
             )
@@ -670,3 +682,69 @@ def list_login_history(user_id: int, limit: int = 100) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def _new_share_token() -> str:
+    return str(uuid4())
+
+
+def ensure_bot_share(bot_id: str) -> dict[str, Any]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bot_shares (bot_id, share_token, enabled)
+                VALUES (%s, %s, FALSE)
+                ON CONFLICT (bot_id) DO NOTHING
+                """,
+                (bot_id, _new_share_token()),
+            )
+            cur.execute(
+                """
+                SELECT bot_id, share_token, enabled, created_at, updated_at
+                FROM bot_shares
+                WHERE bot_id = %s
+                LIMIT 1
+                """,
+                (bot_id,),
+            )
+            row = cur.fetchone()
+        conn.commit()
+
+    return dict(row) if row else {"bot_id": bot_id, "share_token": _new_share_token(), "enabled": False}
+
+
+def set_bot_share_enabled(bot_id: str, enabled: bool) -> dict[str, Any]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bot_shares (bot_id, share_token, enabled)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (bot_id)
+                DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
+                RETURNING bot_id, share_token, enabled, created_at, updated_at
+                """,
+                (bot_id, _new_share_token(), enabled),
+            )
+            row = cur.fetchone()
+        conn.commit()
+
+    return dict(row)
+
+
+def get_bot_share_by_token(share_token: str) -> dict[str, Any] | None:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT bot_id, share_token, enabled, created_at, updated_at
+                FROM bot_shares
+                WHERE share_token = %s
+                LIMIT 1
+                """,
+                (share_token,),
+            )
+            row = cur.fetchone()
+
+    return dict(row) if row else None

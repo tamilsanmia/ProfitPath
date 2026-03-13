@@ -6,13 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { addBrowserLog } from "@/lib/browser-log";
 import { AVATAR_UPDATED_EVENT } from "@/lib/local-avatar";
 import {
   Bot,
-  ChevronLeft,
-  ChevronRight,
   CreditCard,
   LayoutDashboard,
   LineChart,
@@ -38,10 +37,9 @@ type MenuSection = {
 
 type Props = {
   collapsed: boolean;
-  setCollapsed: (collapsed: boolean) => void;
 };
 
-export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
+export function DashboardSidebar({ collapsed }: Props) {
   const resolveAvatarSrc = (value: string | null | undefined): string | undefined => {
     if (!value) {
       return undefined;
@@ -81,15 +79,15 @@ export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
   useEffect(() => {
     if (pathname === "/") {
       setActiveItem("dashboard");
-    } else if (pathname.startsWith("/my-analytics")) {
-      setActiveItem("my-analytics");
+    } else if (pathname.startsWith("/my-bots") || pathname.startsWith("/my-analytics")) {
+      setActiveItem("my-bots");
     } else if (pathname.startsWith("/invite-friends")) {
       setActiveItem("invite-friends");
     } else if (pathname.startsWith("/subscription")) {
       setActiveItem("subscription");
     } else if (pathname.startsWith("/settings")) {
       setActiveItem("settings");
-    } else if (pathname.startsWith("/profile")) {
+    } else if (pathname.startsWith("/profile") || pathname.startsWith("/settings?tab=profile")) {
       setActiveItem("profile");
     } else {
       // Extract the main path without subpaths
@@ -155,31 +153,12 @@ export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
     };
   }, [sessionUser?.email]);
 
-  // Handle window resize to auto-collapse on smaller screens
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth < 1024) {
-        setCollapsed(true);
-      }
-    };
-
-    // Set initial state
-    handleResize();
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [setCollapsed]);
-
-  const toggleSidebar = () => {
-    setCollapsed(!collapsed);
-  };
-
   const menuItems: MenuSection[] = [
     {
       section: "Main",
       items: [
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
-        { id: "my-analytics", label: "My Bots", icon: LineChart, href: "/my-analytics" },
+        { id: "my-bots", label: "My Bots", icon: LineChart, href: "/my-bots" },
       ],
     },
     {
@@ -208,19 +187,8 @@ export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
 
   return (
     <>
-      {!collapsed && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setCollapsed(true)} />}
-
       {/* Sidebar */}
       <aside className={cn("fixed flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out z-40", collapsed ? "w-[72px]" : " left-0 w-[240px]")}>
-        {/* Collapse toggle button */}
-        <button
-          onClick={toggleSidebar}
-          className="absolute -right-3 top-6 z-30 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm hover:text-foreground"
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-
         {/* Header */}
         <div className={cn("flex h-16 items-center py-4", collapsed ? "justify-center px-0" : "justify-center px-3")}>
           <div className="flex items-center gap-2">
@@ -315,11 +283,28 @@ export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
               })}
             </div>
 
+            <div className="mt-2 flex justify-center">
+              {collapsed ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <ThemeToggle variant="ghost" className="h-9 w-9" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="font-normal">
+                    Theme (Light / Dark / System)
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <ThemeToggle variant="ghost" className="h-9 w-9" />
+              )}
+            </div>
+
             <Separator className="my-2" />
 
             <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
               {!collapsed && (
-                <Link href="/profile" className="flex items-center gap-2">
+                <Link href="/settings?tab=profile" className="flex items-center gap-2">
                   <Avatar className="h-8 w-8">
                     <AvatarImage src={resolveAvatarSrc(avatarSrc)} />
                     <AvatarFallback>{initials}</AvatarFallback>
@@ -334,7 +319,7 @@ export function DashboardSidebar({ collapsed, setCollapsed }: Props) {
               {collapsed && (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Link href="/profile" aria-label="Profile">
+                    <Link href="/settings?tab=profile" aria-label="Profile">
                       <Avatar className="h-8 w-8 cursor-pointer">
                         <AvatarImage src={resolveAvatarSrc(avatarSrc)} />
                         <AvatarFallback>{initials}</AvatarFallback>

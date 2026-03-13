@@ -47,11 +47,13 @@ from .database import (
     update_user_password,
 )
 from .docker_client import get_docker_client, safe_docker_ping
+from .freqtrade import router as freqtrade_router
 from .mailer import send_reset_email
 from .security import hash_password, verify_password
 from .settings import settings
 
 app = FastAPI(title=settings.app_name)
+app.include_router(freqtrade_router)
 os.makedirs(settings.profile_pictures_dir, exist_ok=True)
 app.mount("/media/profile-pictures", StaticFiles(directory=settings.profile_pictures_dir), name="profile-pictures")
 

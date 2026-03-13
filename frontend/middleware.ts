@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const AUTH_PAGES = new Set(["/login", "/signin", "/signup", "/forgot-password", "/reset-password"]);
-const PUBLIC_PATH_PREFIXES = ["/invite/"];
+const PUBLIC_PATH_PREFIXES = ["/invite/", "/shared/"];
 const PUBLIC_API_PREFIXES = [
   "/api/auth/signin",
   "/api/auth/google",
@@ -10,6 +10,7 @@ const PUBLIC_API_PREFIXES = [
   "/api/auth/reset-password",
   "/api/users",
   "/api/geo/country",
+  "/api/shared/bot-accounts",
 ];
 
 function isStaticPath(pathname: string): boolean {

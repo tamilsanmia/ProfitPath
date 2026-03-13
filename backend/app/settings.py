@@ -22,6 +22,13 @@ class Settings(BaseSettings):
 
     reset_token_ttl_minutes: int = 30
 
+    # FreqTrade bot connections (comma-separated for multiple bots)
+    freqtrade_urls: str = "http://localhost:8001"
+    freqtrade_usernames: str = "admin"
+    freqtrade_passwords: str = "admin"
+    freqtrade_bot_ids: str = "freqtrade-1"
+    freqtrade_bot_names: str = "FreqAI Bot"
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="BACKEND_")
 
 
