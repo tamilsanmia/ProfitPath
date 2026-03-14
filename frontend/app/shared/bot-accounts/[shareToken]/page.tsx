@@ -8,5 +8,9 @@ export const metadata = {
 export default async function SharedBotAccountPage({ params }: { params: Promise<{ shareToken: string }> }) {
   const { shareToken } = await params
 
-  return <MyBotsPage initialBotId={decodeURIComponent(shareToken)} publicView />
+  return (
+    <section data-name="page-shared-bot-account">
+      <MyBotsPage initialBotId={decodeURIComponent(shareToken)} publicView />
+    </section>
+  )
 }

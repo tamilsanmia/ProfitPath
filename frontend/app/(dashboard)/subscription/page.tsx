@@ -6,5 +6,9 @@ export const metadata = {
 };
 
 export default function SubscriptionPage() {
-  return <SubscriptionInterface />;
+  return (
+    <section data-name="page-dashboard-subscription">
+      <SubscriptionInterface />
+    </section>
+  );
 }

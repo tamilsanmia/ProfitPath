@@ -7,5 +7,9 @@ export default function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return <DashboardSidebarTopbar>{children}</DashboardSidebarTopbar>;
+  return (
+    <section data-name="layout-dashboard-route">
+      <DashboardSidebarTopbar>{children}</DashboardSidebarTopbar>
+    </section>
+  );
 }

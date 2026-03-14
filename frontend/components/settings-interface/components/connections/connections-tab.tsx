@@ -50,7 +50,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
   const handleConnect = async (connectionId: string) => {
     setIsConnecting(true)
     try {
-      const nextConnections = connections.map((conn) =>
+      const nextConnections = connections.map((conn): Connection =>
         conn.id === connectionId ? { ...conn, status: "connected", lastSync: new Date().toISOString() } : conn,
       )
       const result = await onConnectionsPersist(nextConnections)
@@ -68,7 +68,7 @@ export const ConnectionsTab: React.FC<ConnectionsTabProps> = ({
 
   const handleDisconnect = async (connectionId: string) => {
     try {
-      const nextConnections = connections.map((conn) =>
+      const nextConnections = connections.map((conn): Connection =>
         conn.id === connectionId ? { ...conn, status: "disconnected" } : conn,
       )
       const result = await onConnectionsPersist(nextConnections)

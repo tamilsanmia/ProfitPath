@@ -6,5 +6,9 @@ export const metadata = {
 };
 
 export default function SettingsPage() {
-  return <SettingsInterface />;
+  return (
+    <section data-name="page-dashboard-settings">
+      <SettingsInterface />
+    </section>
+  );
 }

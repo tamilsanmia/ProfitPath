@@ -6,5 +6,9 @@ export const metadata = {
 };
 
 export default function InviteFriendsPage() {
-  return <InviteFriendsInterface />;
+  return (
+    <section data-name="page-dashboard-invite-friends">
+      <InviteFriendsInterface />
+    </section>
+  );
 }

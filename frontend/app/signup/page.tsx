@@ -446,9 +446,9 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
+    <div data-name="page-auth-signup" className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
       {preloader && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#111827] px-4">
+        <div data-name="signup-preloader-overlay" className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#111827] px-4">
           <p className="mb-8 text-[35px] font-bold tracking-tight text-white">ProfitPath</p>
           <div className="mb-8 h-8 w-8 animate-spin rounded-full border-[3px] border-white/20 border-t-white" />
           {preloader.status === "error" && (
@@ -465,17 +465,17 @@ export default function SignupPage() {
           )}
         </div>
       )}
-      <div className="mx-auto w-full max-w-[448px]">
-        <div className="mb-9 text-center">
+      <div data-name="signup-container" className="mx-auto w-full max-w-[448px]">
+        <div data-name="signup-brand-header" className="mb-9 text-center">
           <p className="text-[35px] leading-none font-bold tracking-tight text-white">ProfitPath</p>
         </div>
 
-      <Card className="border-0 bg-transparent shadow-none">
+      <Card data-name="signup-card" className="border-0 bg-transparent shadow-none">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="pb-[5px] text-[20px] leading-none font-semibold tracking-tight text-white text-center">Create your account</CardTitle>
         </CardHeader>
-        <CardContent className="px-0">
-          <form className="grid gap-4" onSubmit={onSubmit}>
+        <CardContent data-name="signup-card-content" className="px-0">
+          <form data-name="signup-form" className="grid gap-4" onSubmit={onSubmit}>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="first-name" className="text-[14px] font-semibold text-[#e7ecfa]">First name</Label>

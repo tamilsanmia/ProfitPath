@@ -61,23 +61,23 @@ export function InviteFriendsInterface() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div data-name="invite-friends-interface" className="space-y-6">
+      <div data-name="invite-friends-header">
         <h1 className="text-3xl font-bold tracking-tight">Invite Friends</h1>
         <p className="text-muted-foreground mt-2">Invite your friends to DefibotX with your personal referral link</p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div data-name="invite-friends-cards" className="grid gap-6 md:grid-cols-2">
         <ReferralLinkCard referralLink={referralLink} />
         <EmailInvitationCard />
       </div>
 
-      <Tabs defaultValue="referrals" className="w-full">
-        <TabsList className="grid w-full grid-cols-1 md:w-[240px]">
+      <Tabs data-name="invite-friends-tabs" defaultValue="referrals" className="w-full">
+        <TabsList data-name="invite-friends-tabs-list" className="grid w-full grid-cols-1 md:w-[240px]">
           <TabsTrigger value="referrals">Referral History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="referrals" className="mt-6">
+        <TabsContent data-name="invite-friends-referrals-tab" value="referrals" className="mt-6">
           <ReferralHistoryTab referrals={referrals} />
         </TabsContent>
       </Tabs>

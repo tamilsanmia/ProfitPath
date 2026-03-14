@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import {
+  Archive,
   BarChart3,
   Bot,
   CalendarDays,
@@ -19,6 +21,7 @@ import {
   Clock3,
   Copy,
   Filter,
+  LayoutGrid,
   LineChart,
   List,
   Loader2,
@@ -29,6 +32,7 @@ import {
   Search,
   Share2,
   SlidersHorizontal,
+  Trash2,
   MoreHorizontal,
   XCircle,
   Wallet,
@@ -54,11 +58,42 @@ import type { FtOpenTrade, FtClosedTrade, FtPerformance, FtBotEntry } from "@/ho
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function fmt(n: number, decimals = 2) {
-  return n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+function toSafeNumber(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
 }
-function fmtPct(n: number) { return (n * 100).toFixed(2) + "%" }
-function fmtUsd(n: number) { return "$" + fmt(n) }
+
+function fmt(n: unknown, decimals = 2) {
+  const safe = toSafeNumber(n)
+  return safe.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+}
+function fmtPct(n: unknown) { return (toSafeNumber(n) * 100).toFixed(2) + "%" }
+function fmtUsd(n: unknown) { return "$" + fmt(n) }
+
+function fmtBotDisplayId(id?: string) {
+  return String(id || "-")
+}
+
+function normalizeExchangeName(value?: string) {
+  const raw = String(value || "").trim().toLowerCase()
+  if (raw.includes("bybit")) return "Bybit"
+  if (raw.includes("binance")) return "Binance"
+  return "Exchange"
+}
+
+function exchangeFaviconUrl(value?: string) {
+  const raw = String(value || "").trim().toLowerCase()
+  if (raw.includes("bybit")) return "https://www.bybit.com/favicon.ico"
+  return "https://bin.bnbstatic.com/static/images/common/favicon.ico"
+}
+
+function inferTradeTypeLabel(botName?: string, stakeAmount?: unknown) {
+  const name = String(botName || "").toLowerCase()
+  if (name.includes("fixed")) return "Fixed"
+  if (name.includes("compound")) return "Compound"
+  if (typeof stakeAmount === "string" && stakeAmount.trim().toLowerCase() === "unlimited") return "Compound"
+  return "Fixed"
+}
 
 function fmtPair(pair?: string) {
   if (!pair) return "-"
@@ -141,7 +176,7 @@ function sleep(ms: number) {
 }
 
 const selectClassName =
-  "h-11 w-full appearance-none rounded-xl border border-border bg-background px-4 pr-10 text-sm text-foreground outline-none"
+  "h-8 appearance-none rounded-full border border-border bg-background px-3 pr-7 text-xs text-foreground outline-none cursor-pointer"
 
 const FILTER_ALL = "All"
 
@@ -370,64 +405,99 @@ function BotSummaryCard({
   isSelected,
   viewMode,
   onSelect,
+  archived,
+  onToggleArchived,
 }: {
   bot: FtBotEntry
   isSelected: boolean
   viewMode: "cards" | "list"
   onSelect: () => void
+  archived: boolean
+  onToggleArchived: (botId: string) => void
 }) {
   const { data: stats, loading } = useBotStats(bot.id)
 
   const status = stats?.config?.state ?? (loading ? "Loading" : "Unknown")
-  const statusClassName =
-    status.toLowerCase() === "running"
-      ? "rounded-full border border-emerald-400/20 bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300"
-      : "rounded-full border border-border bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-secondary-foreground"
-  const balance = stats?.balance_usdt ?? 0
-  const exchangeFuture = stats?.config?.exchange ? `${stats.config.exchange} Futures` : "N/A Futures"
-  const pnl = stats?.profit?.profit_closed_fiat ?? 0
-  const profitPct = stats?.profit?.profit_closed_percent ?? 0
-  const pnlClass = pnl >= 0 ? "text-emerald-400" : "text-red-400"
+  const setupCompleted = status.toLowerCase() !== "pending_setup"
+  const statusLabel = setupCompleted ? (archived ? "Archived" : "Live") : "New"
+  const statusClassName = setupCompleted
+    ? archived
+      ? "rounded-full border border-slate-500/40 bg-slate-500/15 px-2.5 py-0.5 text-[11px] font-medium text-slate-200"
+      : "rounded-full border border-emerald-400/20 bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300"
+    : "rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200"
+  const capital = Number(stats?.balance_usdt ?? 0)
+  const exchangeName = normalizeExchangeName(String(stats?.config?.exchange || bot.name))
+  const tradeType = inferTradeTypeLabel(bot.name, stats?.config?.stake_amount)
+  const favicon = exchangeFaviconUrl(exchangeName)
+  const isDemo = (bot.account_type || "").toLowerCase().includes("demo")
+  const isReal = (bot.account_type || "").toLowerCase().includes("real")
 
   if (viewMode === "list") {
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className={cn(
           "w-full rounded-lg border bg-card px-4 py-4 text-left transition-all hover:border-primary/60",
           isSelected ? "border-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]" : "border-border",
+          archived && "opacity-80",
         )}
         onClick={onSelect}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault()
+            onSelect()
+          }
+        }}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold text-foreground">{bot.name}</p>
-            <p className="text-xs text-muted-foreground">{bot.id}</p>
+            <div className="flex items-center gap-2">
+              <img src={favicon} alt={exchangeName} className="h-4 w-4 rounded-sm" />
+              <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
+            </div>
           </div>
-          <Badge className={statusClassName}>
-            {status}
-          </Badge>
+          <div className="flex items-center gap-1">
+            {isDemo && (
+              <Badge className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">Demo</Badge>
+            )}
+            {!isDemo && isReal && (
+              <Badge className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-300">Real</Badge>
+            )}
+            <Badge className={statusClassName}>{statusLabel}</Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onToggleArchived(bot.id)
+                  }}
+                >
+                  {archived ? "Unarchive" : "Archive"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <p className="text-muted-foreground">Balance</p>
-            <p className="font-semibold text-foreground">{fmtUsd(balance)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Exchange</p>
-            <p className="truncate font-semibold text-foreground">{exchangeFuture}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">P&L</p>
-            <p className={cn("font-semibold", pnlClass)}>{pnl >= 0 ? "+" : ""}{fmtUsd(pnl)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Profit %</p>
-            <p className={cn("font-semibold", pnlClass)}>{profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}%</p>
-          </div>
+        <div className="text-[12px] font-medium text-[#99a1af]">
+          <span>{fmt(Math.max(0, capital), 0)} USDT</span>
+          <span className="mx-2">•</span>
+          <span>{exchangeName}</span>
+          <span className="mx-2">•</span>
+          <span>{tradeType}</span>
         </div>
-      </button>
+      </div>
     )
   }
 
@@ -436,37 +506,57 @@ function BotSummaryCard({
       className={cn(
         "cursor-pointer rounded-lg border bg-card transition-all hover:border-primary/60",
         isSelected ? "border-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]" : "border-border",
+        archived && "opacity-80",
       )}
       onClick={onSelect}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[17px] font-semibold text-foreground">{bot.name}</p>
-            <p className="text-xs text-muted-foreground">{bot.id}</p>
+            <div className="flex items-center gap-2">
+              <img src={favicon} alt={exchangeName} className="h-4 w-4 rounded-sm" />
+              <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
+            </div>
           </div>
-          <Badge className={statusClassName}>
-            {status}
-          </Badge>
+          <div className="flex items-center gap-1">
+            {isDemo && (
+              <Badge className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">Demo</Badge>
+            )}
+            {!isDemo && isReal && (
+              <Badge className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2.5 py-0.5 text-[11px] font-medium text-sky-300">Real</Badge>
+            )}
+            <Badge className={statusClassName}>{statusLabel}</Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onToggleArchived(bot.id)
+                  }}
+                >
+                  {archived ? "Unarchive" : "Archive"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
-          <div>
-            <p className="text-muted-foreground">Balance</p>
-            <p className="font-semibold text-foreground">{fmtUsd(balance)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Exchange</p>
-            <p className="truncate font-semibold text-foreground">{exchangeFuture}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">P&L</p>
-            <p className={cn("font-semibold", pnlClass)}>{pnl >= 0 ? "+" : ""}{fmtUsd(pnl)}</p>
-          </div>
-          <div>
-            <p className="text-muted-foreground">Profit %</p>
-            <p className={cn("font-semibold", pnlClass)}>{profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}%</p>
-          </div>
+        <div className="text-[12px] font-medium text-[#99a1af]">
+          <span>{fmt(Math.max(0, capital), 0)} USDT</span>
+          <span className="mx-2">•</span>
+          <span>{exchangeName}</span>
+          <span className="mx-2">•</span>
+          <span>{tradeType}</span>
         </div>
       </CardContent>
     </Card>
@@ -476,10 +566,35 @@ function BotSummaryCard({
 // ─── main export ──────────────────────────────────────────────────────────────
 
 export function MyBotsPage({ initialBotId = null, publicView = false }: { initialBotId?: string | null; publicView?: boolean } = {}) {
+  const searchParams = useSearchParams()
+  const paymentDone = searchParams.get("payment") === "done"
+  const purchasedBotId = searchParams.get("bot")
+
   const [selectedId, setSelectedId] = useState<string | null>(initialBotId)
+  const [showPaymentBanner, setShowPaymentBanner] = useState(paymentDone)
+  const [setupLoading, setSetupLoading] = useState(false)
+  const [setupValidateLoading, setSetupValidateLoading] = useState(false)
+  const [setupDeployLoading, setSetupDeployLoading] = useState(false)
+  const [setupMessage, setSetupMessage] = useState<string | null>(null)
+  const [setupError, setSetupError] = useState<string | null>(null)
+  const [copiedIpField, setCopiedIpField] = useState<"created" | "backend" | null>(null)
+  const [pipelineStep, setPipelineStep] = useState<1 | 2 | 3>(1)
+  const [binanceApiKey, setBinanceApiKey] = useState("")
+  const [binanceApiSecret, setBinanceApiSecret] = useState("")
+  const [setupState, setSetupState] = useState<{
+    status?: string
+    last_step?: string
+    server_ip?: string
+    backend_server_ip?: string
+    deploy_enabled?: boolean
+    deploy_unavailable_reason?: string
+    last_error?: string
+    history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+  } | null>(null)
   const [typeFilter, setTypeFilter] = useState(FILTER_ALL)
+  const [exchangeFilter, setExchangeFilter] = useState(FILTER_ALL)
   const [stateFilter, setStateFilter] = useState(FILTER_ALL)
-  const [phaseFilter, setPhaseFilter] = useState(FILTER_ALL)
+  const [archiveDisplayFilter, setArchiveDisplayFilter] = useState(FILTER_ALL)
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false)
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards")
   const [historyTab, setHistoryTab] = useState<"open" | "closed" | "performance">("open")
@@ -487,7 +602,19 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null)
   const [forceExitAllLoading, setForceExitAllLoading] = useState(false)
   const [botControlLoading, setBotControlLoading] = useState<"pause" | "start" | null>(null)
+  const [exchangePanelOpen, setExchangePanelOpen] = useState(false)
+  const [exchangeAccountName, setExchangeAccountName] = useState("")
+  const [exchangeApiKeyInput, setExchangeApiKeyInput] = useState("")
+  const [exchangeApiSecretInput, setExchangeApiSecretInput] = useState("")
+  const [exchangeIpsCopied, setExchangeIpsCopied] = useState(false)
+  const [exchangeConnectLoading, setExchangeConnectLoading] = useState(false)
+  const [exchangeConnectStage, setExchangeConnectStage] = useState<"validating" | "switching" | null>(null)
+  const [switchToDryRunDialogOpen, setSwitchToDryRunDialogOpen] = useState(false)
+  const [switchToDryRunLoading, setSwitchToDryRunLoading] = useState(false)
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [archivedBots, setArchivedBots] = useState<Record<string, boolean>>({})
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [shareStateByBot, setShareStateByBot] = useState<Record<string, { enabled: boolean; token: string }>>({})
   const [shareLoading, setShareLoading] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
@@ -498,6 +625,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
+  const setupBotId = publicView ? null : selectedId
 
   const apiBase = publicView ? "/api/shared/bot-accounts" : "/api/bots"
 
@@ -513,6 +641,110 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     if (initialBotId) setSelectedId(initialBotId)
   }, [initialBotId])
 
+  useEffect(() => {
+    setShowPaymentBanner(paymentDone)
+  }, [paymentDone])
+
+  useEffect(() => {
+    if (publicView) return
+    if (!purchasedBotId) return
+    if (bots.some((b) => b.id === purchasedBotId)) {
+      setSelectedId(purchasedBotId)
+    }
+  }, [bots, publicView, purchasedBotId])
+
+  useEffect(() => {
+    if (publicView) return
+    try {
+      const raw = window.localStorage.getItem("pp_archived_bots")
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Record<string, boolean>
+      if (parsed && typeof parsed === "object") {
+        setArchivedBots(parsed)
+      }
+    } catch {
+      // no-op: invalid local storage payload
+    }
+  }, [publicView])
+
+  useEffect(() => {
+    if (publicView) return
+    try {
+      window.localStorage.setItem("pp_archived_bots", JSON.stringify(archivedBots))
+    } catch {
+      // no-op: storage unavailable
+    }
+  }, [archivedBots, publicView])
+
+  const toggleArchived = (botId: string) => {
+    setArchivedBots((prev) => ({
+      ...prev,
+      [botId]: !prev[botId],
+    }))
+  }
+
+  useEffect(() => {
+    if (!setupBotId) {
+      setSetupState(null)
+      return
+    }
+
+    let cancelled = false
+    fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup`, { cache: "no-store" })
+      .then(async (res) => {
+        const payload = (await res.json().catch(() => ({}))) as {
+          setup?: {
+            status?: string
+            last_step?: string
+            server_ip?: string
+            backend_server_ip?: string
+            deploy_enabled?: boolean
+            deploy_unavailable_reason?: string
+            last_error?: string
+            history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+          }
+        }
+        if (!res.ok) {
+          if (!cancelled) {
+            setSetupState(null)
+          }
+          return
+        }
+        if (cancelled) return
+        const setup = payload.setup ?? null
+        setSetupState(setup)
+        if (!setup) return
+
+        if (setup.status === "completed") {
+          setPipelineStep(3)
+        } else if ((setup.history ?? []).some((item) => String(item?.status || "") === "api_validated")) {
+          setPipelineStep(3)
+        } else if (setup.server_ip) {
+          setPipelineStep(2)
+        } else {
+          setPipelineStep(1)
+        }
+
+        if (setup.status === "completed") {
+          setSetupMessage(`Setup already completed | Server IP: ${setup.server_ip || "-"}`)
+          setSetupError(null)
+        } else if (setup.last_error) {
+          setSetupError(setup.last_error)
+        } else if (setup.last_step) {
+          setSetupMessage(`Current step: ${setup.last_step.replace(/_/g, " ")} (${setup.status || "pending"})`)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSetupState(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [setupBotId])
+
   const publicBot = useMemo(() => {
     if (!selectedId) return null
     return {
@@ -523,11 +755,70 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
 
   const filteredBots = useMemo(() => {
     if (publicView) return publicBot ? [publicBot] : []
-    if (typeFilter === FILTER_ALL) return bots
-    return bots // Bot list filters are reserved for future metadata.
-  }, [bots, publicBot, publicView, typeFilter])
+    let result = bots
+    if (typeFilter !== FILTER_ALL) {
+      result = result.filter((b) => {
+        const at = (b.account_type || "").toLowerCase()
+        const isDemo = at === "demo" || at.includes("demo")
+        return typeFilter === "Demo" ? isDemo : !isDemo
+      })
+    }
+    if (exchangeFilter !== FILTER_ALL) {
+      result = result.filter((b) =>
+        b.name.toLowerCase().includes(exchangeFilter.toLowerCase())
+      )
+    }
+    if (archiveDisplayFilter !== FILTER_ALL) {
+      result = result.filter((b) => {
+        const isArch = !!archivedBots[b.id]
+        return archiveDisplayFilter === "Archived" ? isArch : !isArch
+      })
+    }
+    return result
+  }, [bots, publicBot, publicView, typeFilter, exchangeFilter, archiveDisplayFilter, archivedBots])
+
+  const backendServerIpDisplay = useMemo(() => {
+    const direct = String(setupState?.backend_server_ip || "").trim()
+    if (direct) return direct
+
+    const fallbackSource = [setupError, setupState?.last_error].filter(Boolean).join(" ")
+    const match = fallbackSource.match(/request\s+ip\s*:\s*([0-9]{1,3}(?:\.[0-9]{1,3}){3})/i)
+    return match?.[1] || "167.71.232.153"
+  }, [setupError, setupState?.backend_server_ip, setupState?.last_error])
+
+  const setupHistory = setupState?.history ?? []
+  const isApiValidated = setupHistory.some((item) => String(item?.status || "") === "api_validated")
+  const isDeployCompleted =
+    String(setupState?.status || "").toLowerCase() === "completed" ||
+    setupHistory.some((item) => String(item?.status || "") === "deploy_completed")
+  const isServerCreated = Boolean(setupState?.server_ip)
+  const isApiStepCompleted = isApiValidated || String(setupState?.status || "").toLowerCase() === "completed"
+  const deployStepAvailable = setupState?.deploy_enabled !== false
+  const setupInstallerLoading = setupLoading || setupValidateLoading || setupDeployLoading
+  const setupInstallerLoadingText = setupLoading
+    ? "Creating server..."
+    : setupValidateLoading
+    ? "Validating API..."
+    : setupDeployLoading
+    ? "Deploying bot..."
+    : null
 
   const bot = publicView ? publicBot : bots.find((b) => b.id === selectedId) ?? null
+  const displayBotId = bot?.id || selectedId || "-"
+
+  const botExchange = normalizeExchangeName((bot as { name?: string } | null)?.name)
+  const botAccountType = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase()
+  const isBotLiveMode = botAccountType.includes("real")
+  const botIsDemo = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase().includes("demo")
+  const showApiStep = !botIsDemo
+  const showCreatedServerIp = botExchange === "Binance" && !botIsDemo
+  const exchangeWhitelistIps = useMemo(() => {
+    const result: string[] = []
+    const created = String(setupState?.server_ip || "").trim()
+    if (created) result.push(created)
+    result.push("167.71.232.153")
+    return result.join(" ")
+  }, [setupState?.server_ip])
 
   const unrealizedPnl = useMemo(() => {
     return openTrades.reduce((sum, t) => sum + (t.profit_abs ?? 0), 0)
@@ -654,6 +945,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   }, [closedTrades])
 
   const botState = (stats?.config.state ?? "").toLowerCase()
+  const isBotSetupCompleted = botState !== "pending_setup"
   const entriesPaused = botState === "paused"
   const botRunning = botState === "running"
   const shareEnabled = !!(selectedId && shareStateByBot[selectedId]?.enabled)
@@ -979,13 +1271,341 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     }
   }
 
+  const handleContinueBotSetup = async () => {
+    if (!setupBotId || setupLoading) return
+
+    setSetupLoading(true)
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          server_ip?: string
+          backend_server_ip?: string
+          deploy_enabled?: boolean
+          deploy_unavailable_reason?: string
+          status?: string
+          last_step?: string
+          last_error?: string
+          history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+        }
+      }
+
+      if (!res.ok) {
+        throw new Error(payload.error || payload.detail || payload.message || "Bot setup failed")
+      }
+
+      const setup = payload.setup ?? null
+      setSetupState(setup)
+      const ip = setup?.server_ip || "-"
+      const statusText = setup?.status ? `Status: ${setup.status}` : "Status: updated"
+      setSetupMessage(`${payload.message || "Bot setup updated"} | Server IP: ${ip} | ${statusText}`)
+      setSetupError(setup?.last_error || null)
+      if (setup?.server_ip) {
+        setPipelineStep(2)
+      }
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Bot setup failed")
+    } finally {
+      setSetupLoading(false)
+    }
+  }
+
+  const handleCopyIp = async (ip: string, field: "created" | "backend") => {
+    const normalized = String(ip || "").trim()
+    if (!normalized) return
+
+    try {
+      await navigator.clipboard.writeText(normalized)
+      setCopiedIpField(field)
+      setSetupMessage(`${field === "created" ? "Created Server IP" : "Backend Server IP"} copied: ${normalized}`)
+      window.setTimeout(() => setCopiedIpField(null), 2000)
+    } catch {
+      setSetupError("Failed to copy IP")
+    }
+  }
+
+  const handleValidateBinanceApi = async () => {
+    if (!setupBotId || setupValidateLoading) return
+
+    const apiKey = binanceApiKey.trim()
+    const apiSecret = binanceApiSecret.trim()
+    const validationRoute = botExchange === "Bybit" ? "validate-bybit" : "validate-binance"
+    const exchangeLabel = botExchange === "Bybit" ? "Bybit" : "Binance"
+
+    setSetupValidateLoading(true)
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/${validationRoute}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, apiSecret }),
+      })
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          server_ip?: string
+          backend_server_ip?: string
+          deploy_enabled?: boolean
+          deploy_unavailable_reason?: string
+          status?: string
+          last_step?: string
+          last_error?: string
+          history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+        }
+      }
+
+      if (!res.ok) {
+        throw new Error(payload.error || payload.detail || payload.message || `${exchangeLabel} API validation failed`)
+      }
+
+      const setup = payload.setup ?? null
+      setSetupState(setup)
+      setPipelineStep(3)
+      setSetupMessage(payload.message || `${exchangeLabel} API validated`)
+      setSetupError(setup?.last_error || null)
+      if (setup?.status === "completed") {
+        setPipelineStep(3)
+        refetchStats()
+        refetchOpen()
+      }
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : `${exchangeLabel} API validation failed`)
+    } finally {
+      setSetupValidateLoading(false)
+    }
+  }
+
+  const handleDeployBot = async () => {
+    if (!setupBotId || setupDeployLoading) return
+
+    setSetupDeployLoading(true)
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ strategyName: "ProfitPath", dryRun: false }),
+      })
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          server_ip?: string
+          backend_server_ip?: string
+          status?: string
+          last_step?: string
+          last_error?: string
+          history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+        }
+      }
+
+      if (!res.ok) {
+        throw new Error(payload.error || payload.detail || payload.message || "Bot deployment failed")
+      }
+
+      setSetupState(payload.setup ?? null)
+      setSetupMessage(payload.message || "Bot deployed")
+      setSetupError(payload.setup?.last_error || null)
+      refetchStats()
+      refetchOpen()
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Bot deployment failed")
+    } finally {
+      setSetupDeployLoading(false)
+    }
+  }
+
+  const handleDeleteBot = async () => {
+    if (!selectedId || deleteLoading) return
+
+    setDeleteLoading(true)
+    setSetupError(null)
+
+    try {
+      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(selectedId)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      })
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+      }
+
+      if (!res.ok) {
+        throw new Error(payload.error || payload.detail || payload.message || "Failed to delete bot")
+      }
+
+      setDeleteDialogOpen(false)
+      window.location.reload()
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Failed to delete bot")
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  const handleCopyExchangeIps = async () => {
+    if (!exchangeWhitelistIps) return
+    try {
+      await navigator.clipboard.writeText(exchangeWhitelistIps)
+      setExchangeIpsCopied(true)
+      window.setTimeout(() => setExchangeIpsCopied(false), 2000)
+    } catch {
+      setSetupError("Failed to copy IP list")
+    }
+  }
+
+  const handleConnectExchange = async () => {
+    if (!setupBotId || exchangeConnectLoading) return
+
+    const apiKey = exchangeApiKeyInput.trim()
+    const apiSecret = exchangeApiSecretInput.trim()
+    const exchangeLabel = botExchange === "Bybit" ? "Bybit" : "Binance"
+    const validateRoute = botExchange === "Bybit" ? "validate-bybit" : "validate-binance"
+
+    if (!apiKey || !apiSecret) {
+      setSetupError(`Please enter ${exchangeLabel} API key and secret`)
+      return
+    }
+
+    setExchangeConnectLoading(true)
+    setExchangeConnectStage("validating")
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const validateRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/${validateRoute}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, apiSecret }),
+      })
+
+      const validatePayload = (await validateRes.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          status?: string
+          last_error?: string
+        }
+      }
+
+      if (!validateRes.ok) {
+        throw new Error(validatePayload.error || validatePayload.detail || validatePayload.message || `${exchangeLabel} API validation failed`)
+      }
+
+      setExchangeConnectStage("switching")
+
+      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          strategyName: "ProfitPath",
+          dryRun: false,
+          apiKey,
+          apiSecret,
+        }),
+      })
+
+      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          status?: string
+          last_error?: string
+        }
+      }
+
+      if (!deployRes.ok) {
+        throw new Error(deployPayload.error || deployPayload.detail || deployPayload.message || "Failed to switch bot to live mode")
+      }
+
+      setSetupMessage(`${exchangeLabel} connected. Bot switched to live mode and keys saved in Settings Connections.`)
+      setSetupError(deployPayload.setup?.last_error || null)
+      setExchangePanelOpen(false)
+      refetchStats()
+      refetchOpen()
+      window.location.reload()
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Failed to connect exchange")
+    } finally {
+      setExchangeConnectLoading(false)
+      setExchangeConnectStage(null)
+    }
+  }
+
+  const handleSwitchToDryRun = async () => {
+    if (!setupBotId || switchToDryRunLoading) return
+
+    setSwitchToDryRunLoading(true)
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          strategyName: "ProfitPath",
+          dryRun: true,
+        }),
+      })
+
+      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          status?: string
+          last_error?: string
+        }
+      }
+
+      if (!deployRes.ok) {
+        throw new Error(deployPayload.error || deployPayload.detail || deployPayload.message || "Failed to switch bot to dry run mode")
+      }
+
+      setSetupMessage("Bot switched from live to dry run mode.")
+      setSetupError(deployPayload.setup?.last_error || null)
+      setSwitchToDryRunDialogOpen(false)
+      refetchStats()
+      refetchOpen()
+      window.location.reload()
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : "Failed to switch bot to dry run mode")
+    } finally {
+      setSwitchToDryRunLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-[calc(100vh-96px)] border border-border bg-background text-foreground rounded-lg">
-      <div className={cn("relative grid min-h-[calc(100vh-96px)] grid-cols-1", publicView ? "xl:grid-cols-1" : isPanelCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[360px_minmax(0,1fr)]")}>
-        {!publicView && <aside className="border-b border-border p-6 transition-all duration-300 xl:border-b-0 xl:border-r">
+    <div data-name="my-bots-page" className="min-h-[calc(100vh-96px)] border border-border bg-background text-foreground rounded-lg">
+      <div data-name="my-bots-layout" className={cn("relative grid min-h-[calc(100vh-96px)] grid-cols-1", publicView ? "xl:grid-cols-1" : isPanelCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[420px_minmax(0,1fr)]")}>
+        {!publicView && <aside data-name="my-bots-sidebar" className="border-b border-border p-6 transition-all duration-300 xl:border-b-0 xl:border-r">
           {!isPanelCollapsed ? (
             <>
-              <div className="flex items-center gap-4">
+              <div data-name="my-bots-sidebar-header" className="flex items-center gap-4">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
                   T
                 </div>
@@ -995,32 +1615,68 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                 </div>
               </div>
 
+              {showPaymentBanner && (
+                <div className="mt-4 space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-emerald-300">Payment completed successfully</p>
+                      <p className="text-xs text-emerald-200/80">Your purchased bot has been added to My Bots.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPaymentBanner(false)}
+                      className="text-emerald-200/80 hover:text-emerald-100"
+                      aria-label="Dismiss payment success message"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {setupError && <p className="text-xs text-red-300">{setupError}</p>}
+                </div>
+              )}
+
               <Button className="mt-6 h-12 w-full rounded-xl bg-[#4a67ff] text-[15px] font-semibold text-white hover:bg-[#5771ff]">
                 <Rocket className="h-4 w-4" />
                 Buy Bot
               </Button>
 
-              <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <div data-name="my-bots-filters" className="mt-5 flex flex-wrap items-center gap-2">
                 <label className="relative">
                   <select
                     value={typeFilter}
                     onChange={(event) => setTypeFilter(event.target.value)}
-                    className={selectClassName}
+                    className={cn(selectClassName, typeFilter !== FILTER_ALL && "border-primary text-foreground font-medium")}
                   >
-                    {[FILTER_ALL, "Competition", "Two Step Pro", "Instant"].map((option) => (
+                    {[FILTER_ALL, "Demo", "Real"].map((option) => (
                       <option key={option} value={option}>
                         {option === FILTER_ALL ? "All Types" : option}
                       </option>
                     ))}
                   </select>
-                  <Filter className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 rotate-90 text-muted-foreground" />
+                </label>
+
+                <label className="relative">
+                  <select
+                    value={exchangeFilter}
+                    onChange={(event) => setExchangeFilter(event.target.value)}
+                    className={cn(selectClassName, exchangeFilter !== FILTER_ALL && "border-primary text-foreground font-medium")}
+                  >
+                    {[FILTER_ALL, "Binance", "Bybit"].map((option) => (
+                      <option key={option} value={option}>
+                        {option === FILTER_ALL ? "All Exchanges" : option}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 rotate-90 text-muted-foreground" />
                 </label>
 
                 <label className="relative">
                   <select
                     value={stateFilter}
                     onChange={(event) => setStateFilter(event.target.value)}
-                    className={selectClassName}
+                    className={cn(selectClassName, stateFilter !== FILTER_ALL && "border-primary text-foreground font-medium")}
                   >
                     {[FILTER_ALL, "Running", "Paused", "Completed"].map((option) => (
                       <option key={option} value={option}>
@@ -1028,55 +1684,57 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                       </option>
                     ))}
                   </select>
-                  <SlidersHorizontal className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 rotate-90 text-muted-foreground" />
                 </label>
 
                 <label className="relative">
                   <select
-                    value={phaseFilter}
-                    onChange={(event) => setPhaseFilter(event.target.value)}
-                    className={selectClassName}
+                    value={archiveDisplayFilter}
+                    onChange={(event) => setArchiveDisplayFilter(event.target.value)}
+                    className={cn(selectClassName, archiveDisplayFilter !== FILTER_ALL && "border-primary text-foreground font-medium")}
                   >
-                    {[FILTER_ALL, "Draft", "Live", "Scaling"].map((option) => (
+                    {[FILTER_ALL, "Unarchived", "Archived"].map((option) => (
                       <option key={option} value={option}>
-                        {option === FILTER_ALL ? "All Phases" : option}
+                        {option === FILTER_ALL ? "All Bots" : option}
                       </option>
                     ))}
                   </select>
-                  <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 rotate-90 text-muted-foreground" />
                 </label>
               </div>
 
-              <div className="mt-5 flex items-center justify-end gap-2">
-                <div className="flex rounded-full border border-border bg-muted p-1">
-                  <button
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-                      viewMode === "cards" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground",
-                    )}
-                    type="button"
-                    onClick={() => setViewMode("cards")}
-                    aria-label="Card view"
-                    aria-pressed={viewMode === "cards"}
-                  >
-                    <Wallet className="h-4 w-4" />
-                  </button>
-                  <button
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full transition-colors",
-                      viewMode === "list" ? "bg-background text-foreground" : "text-muted-foreground hover:text-foreground",
-                    )}
-                    type="button"
-                    onClick={() => setViewMode("list")}
-                    aria-label="List view"
-                    aria-pressed={viewMode === "list"}
-                  >
-                    <List className="h-4 w-4" />
-                  </button>
-                </div>
+              <div data-name="my-bots-view-toggle" className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  aria-label="Extended view"
+                  aria-pressed={viewMode === "cards"}
+                  className={cn(
+                    "relative flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
+                    viewMode === "cards"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("list")}
+                  aria-label="Compact view"
+                  aria-pressed={viewMode === "list"}
+                  className={cn(
+                    "relative flex h-8 w-8 items-center justify-center rounded-full border transition-colors",
+                    viewMode === "list"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <List className="h-4 w-4" />
+                </button>
               </div>
 
-              <div className="mt-4 space-y-3">
+              <div data-name="my-bots-list" className="mt-4 space-y-3">
                 {botsLoading && (
                   <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                     <Spinner /> Loading bots…
@@ -1091,6 +1749,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                       isSelected={isSelected}
                       viewMode={viewMode}
                       onSelect={() => setSelectedId(b.id)}
+                      archived={Boolean(archivedBots[b.id])}
+                      onToggleArchived={toggleArchived}
                     />
                   )
                 })}
@@ -1134,12 +1794,12 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
           onClick={() => setIsPanelCollapsed((prev) => !prev)}
           aria-label={isPanelCollapsed ? "Expand bot panel" : "Collapse bot panel"}
           className="absolute left-[60px] top-10 z-20 hidden h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-[0_4px_14px_rgba(0,0,0,0.2)] hover:border-primary xl:flex"
-          style={{ left: isPanelCollapsed ? 60 : 348 }}
+          style={{ left: isPanelCollapsed ? 60 : 408 }}
         >
           {isPanelCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>}
 
-        <section className="flex items-center justify-center p-6 lg:p-10">
+        <section data-name="my-bots-detail-section" className="flex items-center justify-center p-6 lg:p-10">
           {bot && statsLoading ? (
             <div className="flex h-64 flex-col items-center justify-center gap-3 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin" />
@@ -1153,14 +1813,14 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
               </button>
             </div>
           ) : bot && stats ? (
-            <div className="w-full max-w-[1200px] space-y-4">
+            <div data-name="my-bots-detail-content" className="w-full max-w-[1200px] space-y-4">
               {/* Breadcrumb + actions */}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
+              <div data-name="my-bots-breadcrumb-actions" className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <div data-name="my-bots-breadcrumb" className="flex items-center gap-1">
                   {publicView ? <><span>Shared</span><span>&gt;</span><span>Trading Accounts</span><span>&gt;</span></> : <><span>Home</span><span>&gt;</span><span>Bots</span><span>&gt;</span></>}
-                  <span className="font-medium text-foreground">{bot.name}</span>
+                  <span className="font-medium text-foreground">{fmtBotDisplayId(bot.id)}</span>
                 </div>
-                {!publicView && <div className="flex items-center gap-2">
+                {!publicView && isBotSetupCompleted && <div data-name="my-bots-top-actions" className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => runBotControlAction("start")}
@@ -1192,55 +1852,295 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                     <RefreshCw className="h-3 w-3" />
                     Refresh
                   </button>
+                  <Button
+                    variant="outline"
+                    className="h-7 rounded-lg border-border px-3 text-xs"
+                    onClick={() => {
+                      if (isBotLiveMode) {
+                        setSwitchToDryRunDialogOpen(true)
+                        return
+                      }
+                      setExchangePanelOpen(true)
+                    }}
+                  >
+                    <Wallet className="h-3 w-3" /> {isBotLiveMode ? "Switch" : "Exchange"}
+                  </Button>
                   <Button variant="outline" className="h-7 rounded-lg border-border px-3 text-xs" onClick={() => setShareDialogOpen(true)}>
                     <Share2 className="h-3 w-3" /> Share
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="h-7 rounded-lg border-red-500/40 px-3 text-xs text-red-300 hover:border-red-500/70 hover:bg-red-500/10 hover:text-red-200"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="h-3 w-3" /> Delete
                   </Button>
                 </div>}
               </div>
 
-              {/* Bot header */}
-              <div className="rounded-lg border border-border bg-card p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                      {bot.name.slice(0, 2).toUpperCase()}
+              {false && !publicView && setupBotId && !isDeployCompleted && (
+                <div data-name="setup-pipeline-section" className="rounded-lg border border-border bg-card p-4">
+                  <div data-name="setup-pipeline-header" className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div data-name="setup-pipeline-header-text">
+                      <h3 className="text-sm font-semibold text-foreground">Setup Pipeline</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {botIsDemo
+                          ? `Step 1 creates the server. Step 2 deploys the bot. API validation is not required for demo bots.`
+                          : showCreatedServerIp
+                          ? `Step 1 creates the server and shows IPs to whitelist. Step 2 validates your ${botExchange} API. Step 3 deploys the bot.`
+                          : `Step 1 creates the server. Step 2 validates your ${botExchange} API. Step 3 deploys the bot.`}
+                      </p>
                     </div>
-                    <div>
-                      <h2 className="text-base font-semibold text-foreground">{bot.name}</h2>
-                      <p className="text-xs text-muted-foreground">{stats.config.exchange} · {stats.config.stake_currency}</p>
-                      <p className="text-xs text-muted-foreground">First trade: {stats.profit.first_trade_date?.slice(0, 10) ?? "—"}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {entriesPaused && (
-                      <Badge className="rounded-md border border-orange-400/20 bg-orange-500/10 px-2.5 py-1 text-[11px] text-orange-300">
-                        Entries Paused
-                      </Badge>
-                    )}
-                    {!entriesPaused && (
-                      <Badge
-                        className={cn(
-                          "rounded-md px-2.5 py-1 text-[11px]",
-                          botState === "running"
-                            ? "border border-emerald-400/20 bg-emerald-500/10 text-emerald-300"
-                            : "border border-border bg-secondary text-secondary-foreground"
-                        )}
-                      >
-                        {stats.config.state}
-                      </Badge>
-                    )}
-                    {stats.config.runmode && stats.config.runmode !== "dry_run" && (
-                      <Badge className="rounded-md border border-border bg-secondary px-2.5 py-1 text-[11px] text-secondary-foreground">
-                        {stats.config.runmode}
-                      </Badge>
-                    )}
-                    {stats.config.dry_run && (
-                      <Badge className="rounded-md border border-amber-400/20 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300">Dry Run</Badge>
+                    {setupState?.status === "completed" && (
+                      <Badge className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Setup Completed</Badge>
                     )}
                   </div>
-                </div>
-              </div>
 
+                  <div data-name="setup-installer-steps" className={cn("mt-4 grid gap-2", showApiStep ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                    {(showApiStep
+                      ? [
+                          { number: 1, title: "Create Server" },
+                          { number: 2, title: "Validate API" },
+                          { number: 3, title: "Deploy Bot" },
+                        ]
+                      : [
+                          { number: 1, title: "Create Server" },
+                          { number: 3, title: "Deploy Bot" },
+                        ]
+                    ).map((step, displayIndex) => {
+                      const unlockedStep = showApiStep
+                        ? (isApiStepCompleted ? 3 : isServerCreated ? 2 : 1)
+                        : (isServerCreated ? 3 : 1)
+                      const isUnlocked = step.number <= unlockedStep
+                      const isCurrent = pipelineStep === step.number || (!showApiStep && pipelineStep === 2 && step.number === 3)
+                      const isDone = step.number === 1 ? isServerCreated : step.number === 2 ? isApiStepCompleted : isDeployCompleted
+
+                      return (
+                        <button
+                          key={step.number}
+                          type="button"
+                          onClick={() => {
+                            if (isUnlocked || step.number === pipelineStep) {
+                              setPipelineStep(step.number as 1 | 2 | 3)
+                            }
+                          }}
+                          disabled={!isUnlocked && !isCurrent}
+                          className={cn(
+                            "rounded-lg border px-3 py-2 text-left transition-colors",
+                            isCurrent
+                              ? "border-blue-400/40 bg-blue-500/10"
+                              : isDone
+                              ? "border-emerald-400/30 bg-emerald-500/10"
+                              : "border-border bg-muted/20",
+                            !isUnlocked && !isCurrent && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          <p className="text-[11px] text-muted-foreground">Step {displayIndex + 1}</p>
+                          <p className="text-sm font-semibold text-foreground">{step.title}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {setupInstallerLoading && (
+                    <div data-name="setup-installer-preloader" className="mt-3 rounded-lg border border-blue-400/25 bg-blue-500/10 p-3">
+                      <div className="flex items-center gap-2 text-xs text-blue-200">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>{setupInstallerLoadingText || "Processing..."}</span>
+                      </div>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-blue-900/40">
+                        <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-400" />
+                      </div>
+                    </div>
+                  )}
+
+                  {pipelineStep === 1 && (
+                    <div data-name="setup-installer-step-1" className="mt-4 rounded-lg border border-blue-400/20 bg-blue-500/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">Step 1: Continue to Create Server and Server IPs</p>
+                        <Button
+                          type="button"
+                          onClick={handleContinueBotSetup}
+                          disabled={setupLoading || setupState?.status === "completed" || isServerCreated}
+                          className="h-9 rounded-lg bg-[#4a67ff] text-white hover:bg-[#5771ff] disabled:opacity-50"
+                        >
+                          {setupLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          {setupLoading ? "Creating Server..." : isServerCreated ? "Server Created" : "Continue"}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {showCreatedServerIp
+                          ? "Create your server first. Then copy and whitelist the two IPs below in your exchange API settings."
+                          : "Create your server. No IP whitelisting required for this bot type."}
+                      </p>
+
+                      {showCreatedServerIp && (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="mb-1 text-[11px] text-muted-foreground">IP 1 (Created IP)</p>
+                            <div className="flex items-center gap-2">
+                              <Input value={setupState?.server_ip || ""} readOnly placeholder="-" className="h-9" />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleCopyIp(setupState?.server_ip || "", "created")}
+                                disabled={!setupState?.server_ip}
+                                className="h-9 rounded-lg"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {copiedIpField === "created" ? "Copied" : "Copy"}
+                              </Button>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-[11px] text-muted-foreground">IP 2 (Fixed)</p>
+                            <div className="flex items-center gap-2">
+                              <Input value="167.71.232.153" readOnly className="h-9" />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => handleCopyIp("167.71.232.153", "backend")}
+                                className="h-9 rounded-lg"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                {copiedIpField === "backend" ? "Copied" : "Copy"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={() => setPipelineStep(showApiStep ? 2 : 3)}
+                          disabled={!isServerCreated}
+                          className="h-9 rounded-lg bg-[#4a67ff] text-white hover:bg-[#5771ff] disabled:opacity-50"
+                        >
+                          {showApiStep ? "Next: Validate API" : "Next: Deploy Bot"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {pipelineStep === 2 && showApiStep && (
+                    <div data-name="setup-installer-step-2" className={cn("mt-4 rounded-lg border p-4", isServerCreated ? "border-amber-400/20 bg-amber-500/5" : "border-border bg-muted/20")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">Step 2: Validate API</p>
+                        <Button
+                          type="button"
+                          onClick={handleValidateBinanceApi}
+                          disabled={setupValidateLoading || !isServerCreated || setupState?.status === "completed" || isApiValidated}
+                          className="h-9 rounded-lg bg-[#4a67ff] text-white hover:bg-[#5771ff] disabled:opacity-50"
+                        >
+                          {setupValidateLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          {setupValidateLoading ? "Validating..." : isApiStepCompleted ? "Validated" : `Validate ${botExchange} API`}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">Enter your {botExchange} API key/secret (or leave empty if already saved in Connections), then validate.</p>
+                      {botExchange === "Binance" && (
+                        <p className="mt-1 text-xs text-amber-400/80">&#9432; This validation step currently supports Binance Futures only.</p>
+                      )}
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <Input
+                          value={binanceApiKey}
+                          onChange={(event) => setBinanceApiKey(event.target.value)}
+                          placeholder={`${botExchange} API Key`}
+                          disabled={!isServerCreated || setupState?.status === "completed" || isApiValidated}
+                        />
+                        <Input
+                          value={binanceApiSecret}
+                          onChange={(event) => setBinanceApiSecret(event.target.value)}
+                          placeholder={`${botExchange} API Secret`}
+                          type="password"
+                          disabled={!isServerCreated || setupState?.status === "completed" || isApiValidated}
+                        />
+                      </div>
+
+                      {isApiValidated && setupState?.server_ip && (
+                        <div className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-500/5 p-4">
+                          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-emerald-400">Bot API Connection</p>
+                          <div className="space-y-1.5 font-mono text-[11px]">
+                            {[
+                              { key: "BOT_API_URL", value: `http://${setupState?.server_ip ?? "-"}:18080` },
+                              { key: "BOT_API_USERNAME", value: "admin" },
+                              { key: "BOT_API_PASSWORD", value: "admin" },
+                              { key: "BOT_ID", value: setupBotId ?? "bot-1" },
+                              { key: "BOT_NAME", value: displayBotId },
+                            ].map(({ key, value }) => (
+                              <div key={key} className="flex items-center gap-1.5">
+                                <span className="text-emerald-300">{key}</span>
+                                <span className="text-muted-foreground">=</span>
+                                <span className="text-zinc-200">{value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-4 flex justify-between">
+                        <Button type="button" variant="outline" className="h-9 rounded-lg" onClick={() => setPipelineStep(1)}>
+                          Back
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => setPipelineStep(3)}
+                          disabled={!isApiStepCompleted}
+                          className="h-9 rounded-lg bg-[#4a67ff] text-white hover:bg-[#5771ff] disabled:opacity-50"
+                        >
+                          Next: Deploy Bot
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(pipelineStep === 3 || (pipelineStep >= 2 && !showApiStep)) && (
+                    <div data-name="setup-installer-step-3" className={cn("mt-4 rounded-lg border p-4", isApiStepCompleted ? "border-emerald-400/20 bg-emerald-500/5" : "border-border bg-muted/20")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-foreground">Step 3: Deploy Bot</p>
+                        <Button
+                          type="button"
+                          onClick={handleDeployBot}
+                          disabled={
+                            !deployStepAvailable ||
+                            setupDeployLoading ||
+                            !isServerCreated ||
+                            (!isApiStepCompleted && setupState?.status !== "completed") ||
+                            isDeployCompleted
+                          }
+                          className="h-9 rounded-lg bg-[#1f9f6f] text-white hover:bg-[#25b47d] disabled:opacity-50"
+                        >
+                          {setupDeployLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                          {setupDeployLoading ? "Deploying..." : isDeployCompleted ? "Deployed" : "Deploy Trading Bot"}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">Creates docker files, uploads strategy/config, starts container, and validates bot API.</p>
+                      {!deployStepAvailable && (
+                        <p className="mt-2 text-xs text-amber-300">{setupState?.deploy_unavailable_reason || "Deployment is currently unavailable."}</p>
+                      )}
+                      <div className="mt-4 flex justify-start">
+                        <Button type="button" variant="outline" className="h-9 rounded-lg" onClick={() => setPipelineStep(2)}>
+                          Back
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span>Current Step: {(setupState?.last_step || "pending").replace(/_/g, " ")}</span>
+                    <span>Status: {setupState?.status || "pending"}</span>
+                  </div>
+
+                  {setupMessage && <p className="mt-3 text-xs text-emerald-400">{setupMessage}</p>}
+                  {!!setupError && !(
+                    setupState?.deploy_enabled === false &&
+                    (setupError || "").toLowerCase().includes("deploy ssh private key path is not configured")
+                  ) && <p className="mt-3 text-xs text-red-400">{setupError}</p>}
+                </div>
+              )}
+
+              {isBotSetupCompleted ? (
+                <>
               {/* Overview cards */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 {overviewCards.map((c) => (
@@ -1358,11 +2258,13 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                             borderRadius: 10,
                             color: "hsl(var(--foreground))",
                           }}
-                          formatter={(value: number, name: string) => {
-                            if (name === "profit") return [fmtUsd(value), "Profit"]
-                            if (name === "projected") return [fmtUsd(value), "Projected profit (incl. unrealized)"]
-                            if (name === "pnl") return [fmtUsd(value), "Order P&L"]
-                            return [String(value), name]
+                          formatter={(value, name) => {
+                            const numericValue = toSafeNumber(value)
+                            const seriesName = String(name)
+                            if (seriesName === "profit") return [fmtUsd(numericValue), "Profit"]
+                            if (seriesName === "projected") return [fmtUsd(numericValue), "Projected profit (incl. unrealized)"]
+                            if (seriesName === "pnl") return [fmtUsd(numericValue), "Order P&L"]
+                            return [String(value ?? ""), seriesName]
                           }}
                           labelFormatter={(label, payload) => {
                             const row = payload?.[0]?.payload as { label?: string; pair?: string } | undefined
@@ -1723,10 +2625,105 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                   )
                 )}
               </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-blue-400/30 bg-blue-500/10 p-5">
+                  <h3 className="text-sm font-semibold text-blue-200">Bot setup in progress</h3>
+                  <p className="mt-1 text-xs text-blue-100/80">All bot data will be visible after setup is completed.</p>
+                </div>
+              )}
+
+              {!publicView && exchangePanelOpen && (
+                <div data-name="exchange-sidepanel-overlay" className="fixed inset-0 z-50 bg-black/50">
+                  <div data-name="exchange-sidepanel" className="absolute inset-y-0 right-0 w-full max-w-[420px] overflow-y-auto border-l border-border bg-card p-5 text-foreground shadow-[0_20px_80px_rgba(0,0,0,0.55)]">
+                    <div className="flex items-center justify-between">
+                      <button type="button" onClick={() => setExchangePanelOpen(false)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                        <ChevronLeft className="h-4 w-4" />
+                        Back
+                      </button>
+                      <button type="button" onClick={() => setExchangePanelOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close exchange panel">
+                        <XCircle className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <h3 className="mt-6 text-[36px] font-semibold leading-none tracking-tight text-foreground" style={{ fontSize: "38px" }}>
+                      Connect <span className="text-primary">{botExchange}</span>
+                    </h3>
+
+                    <div className="mt-6 rounded-lg border border-border bg-muted/20 p-4">
+                      <p className="text-sm font-semibold text-foreground">Connect key securely <span className="text-primary">Full guide</span></p>
+                      <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        <li>1. Log in to your exchange account and go to API Settings.</li>
+                        <li>2. Turn on IP whitelisting and copy/paste the following list of IP addresses:</li>
+                      </ol>
+                      <div className="mt-3 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
+                        <span className="truncate text-sm font-semibold text-foreground">{exchangeWhitelistIps}</span>
+                        <button
+                          type="button"
+                          onClick={handleCopyExchangeIps}
+                          className="ml-auto text-muted-foreground hover:text-foreground"
+                          aria-label="Copy IP whitelist"
+                        >
+                          {exchangeIpsCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="mt-3 text-sm text-muted-foreground">3. Paste generated data in inputs below.</p>
+                    </div>
+
+                    <div className="mt-5 space-y-3">
+                      <Input
+                        value={exchangeAccountName}
+                        onChange={(event) => setExchangeAccountName(event.target.value)}
+                        placeholder="Account Name"
+                        className="h-10 border-border bg-background text-foreground placeholder:text-muted-foreground"
+                      />
+                      <Input
+                        value={exchangeApiKeyInput}
+                        onChange={(event) => setExchangeApiKeyInput(event.target.value)}
+                        placeholder="API"
+                        className="h-10 border-border bg-background text-foreground placeholder:text-muted-foreground"
+                      />
+                      <Input
+                        value={exchangeApiSecretInput}
+                        onChange={(event) => setExchangeApiSecretInput(event.target.value)}
+                        placeholder="API Secret"
+                        type="password"
+                        className="h-10 border-border bg-background text-foreground placeholder:text-muted-foreground"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-6 h-12 w-full rounded-md bg-[#4a67ff] text-lg font-semibold text-white hover:bg-[#5771ff] disabled:opacity-50"
+                      onClick={handleConnectExchange}
+                      disabled={exchangeConnectLoading}
+                    >
+                      {exchangeConnectLoading ? "Connecting..." : "Connect"}
+                    </button>
+
+                    <p className="mt-4 text-center text-sm text-muted-foreground">
+                      Don&apos;t have a {botExchange} account? <span className="text-primary">Sign up now</span>
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {!publicView && <Dialog
                 open={shareDialogOpen}
                 onOpenChange={(open) => {
+
+                    {exchangeConnectLoading && (
+                      <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 p-3">
+                        <div className="flex items-center gap-2 text-sm text-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                          <span>
+                            {exchangeConnectStage === "validating"
+                              ? `Validating ${botExchange} API...`
+                              : "Switching bot from dry run to live..."}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   setShareDialogOpen(open)
                   if (!open) setShareCopied(false)
                 }}
@@ -1735,7 +2732,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                   <DialogHeader className="border-b border-white/10 px-6 py-5 text-left">
                     <DialogTitle className="text-3xl font-semibold tracking-tight text-white">Share Dashboard</DialogTitle>
                     <DialogDescription className="pt-1 text-sm text-slate-400">
-                      #{selectedId ?? "-"}
+                      {displayBotId}
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1774,6 +2771,60 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                     <div className="rounded-2xl border border-white/10 bg-black/10 px-6 py-7 text-center text-base leading-7 text-slate-400">
                       Share links allow others to view your trading dashboard and performance metrics.
                     </div>
+                  </div>
+                </DialogContent>
+              </Dialog>}
+
+              {!publicView && <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <DialogContent className="max-w-md border-border bg-card">
+                  <DialogHeader>
+                    <DialogTitle>Delete Bot</DialogTitle>
+                    <DialogDescription>
+                      This will permanently delete this bot and its setup data. This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                    Bot: {displayBotId}
+                  </div>
+
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleteLoading}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleDeleteBot}
+                      disabled={deleteLoading}
+                    >
+                      {deleteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      {deleteLoading ? "Deleting..." : "Delete Bot"}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>}
+
+              {!publicView && <Dialog open={switchToDryRunDialogOpen} onOpenChange={setSwitchToDryRunDialogOpen}>
+                <DialogContent className="max-w-md border-border bg-card">
+                  <DialogHeader>
+                    <DialogTitle>Switch Live To Dry Run</DialogTitle>
+                    <DialogDescription>
+                      This will switch your bot from live mode to dry run mode.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    Bot: {displayBotId}
+                  </div>
+
+                  <div className="mt-2 flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setSwitchToDryRunDialogOpen(false)} disabled={switchToDryRunLoading}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSwitchToDryRun} disabled={switchToDryRunLoading}>
+                      {switchToDryRunLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                      {switchToDryRunLoading ? "Switching..." : "Switch To Dry Run"}
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>}

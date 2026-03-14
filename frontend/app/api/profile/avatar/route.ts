@@ -30,29 +30,35 @@ export async function POST(request: Request) {
   try {
     const incoming = await request.formData();
     const fileEntry = incoming.get("file");
-    if (!(fileEntry instanceof File) && !(fileEntry instanceof Blob)) {
+    if (!(fileEntry instanceof File)) {
       return NextResponse.json({ error: "No image selected" }, { status: 400 });
     }
 
-    const file =
-      fileEntry instanceof File
-        ? fileEntry
-        : new File([fileEntry], "avatar-upload", {
-            type: fileEntry.type || "application/octet-stream",
-          });
+    const file = fileEntry;
 
     const form = new FormData();
     form.append("email", email);
     form.append("file", file);
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
     const response = await fetchBackend("/profile/avatar", {
       method: "POST",
       body: form,
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
-    const payload = await response.json();
+    const raw = await response.text();
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } catch {
+      payload = { detail: raw || "Failed to upload avatar" };
+    }
     if (!response.ok) {
-      return NextResponse.json({ error: payload?.detail ?? "Failed to upload avatar" }, { status: response.status });
+      const detail = String(payload?.detail ?? payload?.error ?? "Failed to upload avatar");
+      return NextResponse.json({ error: detail }, { status: response.status });
     }
 
     const avatarUrl = String(payload?.avatar_url ?? "");
@@ -76,8 +82,11 @@ export async function POST(request: Request) {
     }
 
     return responseOut;
-  } catch {
-    return NextResponse.json({ error: "Failed to upload avatar" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error && err.name === "AbortError"
+      ? "Avatar upload timed out. Please try again."
+      : "Failed to upload avatar";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -88,15 +97,26 @@ export async function DELETE() {
   }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
     const response = await fetchBackend("/profile/avatar", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
-    const payload = await response.json();
+    const raw = await response.text();
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } catch {
+      payload = { detail: raw || "Failed to remove avatar" };
+    }
     if (!response.ok) {
-      return NextResponse.json({ error: payload?.detail ?? "Failed to remove avatar" }, { status: response.status });
+      const detail = String(payload?.detail ?? payload?.error ?? "Failed to remove avatar");
+      return NextResponse.json({ error: detail }, { status: response.status });
     }
 
     const avatarUrl = String(payload?.avatar_url ?? "");
@@ -120,7 +140,10 @@ export async function DELETE() {
     }
 
     return responseOut;
-  } catch {
-    return NextResponse.json({ error: "Failed to remove avatar" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error && err.name === "AbortError"
+      ? "Avatar remove timed out. Please try again."
+      : "Failed to remove avatar";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

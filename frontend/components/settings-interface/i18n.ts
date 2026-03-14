@@ -94,6 +94,7 @@ const EN: Dictionary = {
   "profile.placeholder.company": "Enter your company name",
   "profile.placeholder.position": "Enter your job title",
   "profile.avatar.change": "Change",
+  "profile.avatar.upload": "Upload",
   "profile.avatar.remove": "Remove",
   "profile.avatar.uploading": "Uploading...",
   "profile.avatar.hint": "JPG, PNG or GIF. Max size 5MB.",

@@ -64,18 +64,18 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
-      <div className="mx-auto w-full max-w-[384px]">
-      <div className="mb-9 text-center">
+    <div data-name="page-auth-reset-password" className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
+      <div data-name="reset-password-container" className="mx-auto w-full max-w-[384px]">
+      <div data-name="reset-password-brand-header" className="mb-9 text-center">
         <p className="text-[35px] leading-none font-bold tracking-tight text-white">ProfitPath</p>
       </div>
-      <Card className="border-0 bg-transparent shadow-none">
+      <Card data-name="reset-password-card" className="border-0 bg-transparent shadow-none">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="pb-[5px] text-[20px] leading-none font-semibold tracking-tight text-white text-center">Reset Password</CardTitle>
           <CardDescription className="text-center text-[14px] text-[#95a6cb]">Enter a new password for your account.</CardDescription>
         </CardHeader>
-        <CardContent className="px-0">
-          <form className="grid gap-4" onSubmit={onSubmit}>
+        <CardContent data-name="reset-password-card-content" className="px-0">
+          <form data-name="reset-password-form" className="grid gap-4" onSubmit={onSubmit}>
             <div className="grid gap-2">
               <Label htmlFor="password" className="text-[14px] font-semibold text-[#e7ecfa]">New Password</Label>
               <Input id="password" name="password" type="password" minLength={6} className={controlClass} required />

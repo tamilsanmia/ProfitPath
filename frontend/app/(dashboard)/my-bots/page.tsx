@@ -6,5 +6,9 @@ export const metadata = {
 }
 
 export default function MyBotsRoutePage() {
-  return <MyBotsPage />
+  return (
+    <section data-name="page-dashboard-my-bots">
+      <MyBotsPage />
+    </section>
+  )
 }

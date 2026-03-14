@@ -5,16 +5,17 @@ services:
       dockerfile: Dockerfile.dev
     container_name: profitpath-dev
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
       CI: "true"
-      BACKEND_URL: http://host.docker.internal:8000
+      BACKEND_URL: http://profitpath-backend:8000
       NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - backend_net
     volumes:
       - ./:/app
       - node_modules_cache:/app/node_modules
@@ -68,3 +69,8 @@ volumes:
   next_cache:
   certbot_www:
   certbot_certs:
+
+networks:
+  backend_net:
+    external: true
+    name: backend_default

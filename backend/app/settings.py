@@ -22,12 +22,28 @@ class Settings(BaseSettings):
 
     reset_token_ttl_minutes: int = 30
 
-    # FreqTrade bot connections (comma-separated for multiple bots)
+    # Bot API connections (comma-separated for multiple bots)
     freqtrade_urls: str = "http://localhost:8001"
     freqtrade_usernames: str = "admin"
     freqtrade_passwords: str = "admin"
-    freqtrade_bot_ids: str = "freqtrade-1"
-    freqtrade_bot_names: str = "FreqAI Bot"
+    freqtrade_bot_ids: str = ""
+    freqtrade_bot_names: str = ""
+
+    # Hetzner provisioning
+    hetzner_api_token: str = ""
+    hetzner_datacenter: str = "nbg1-dc3"
+    hetzner_server_type: str = "cx22"
+    hetzner_image: str = "ubuntu-22.04"
+    hetzner_ssh_keys: str = ""
+    hetzner_root_password: str = ""
+
+    # Remote deployment automation
+    deploy_ssh_user: str = "root"
+    deploy_ssh_port: int = 22
+    deploy_ssh_private_key_path: str = ""
+    freqtrade_deploy_dir: str = "/opt/profitpath-freqtrade"
+    freqtrade_deploy_image: str = "freqtradeorg/freqtrade:stable"
+    freqtrade_deploy_api_port: int = 18080
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="BACKEND_")
 

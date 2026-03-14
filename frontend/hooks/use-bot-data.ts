@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// ─── Types matching FreqTrade API responses ──────────────────────────────────
+// ─── Types matching bot API responses ───────────────────────────────────────
 
-export type FtBotEntry = { id: string; name: string };
+export type FtBotEntry = { id: string; name: string; account_type?: string };
 
 export type FtProfit = {
   profit_closed_coin: number;

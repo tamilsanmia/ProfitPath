@@ -4,5 +4,5 @@ export const metadata = {
 };
 
 export default function OverviewPage() {
-  return <div />;
+  return <div data-name="page-control-panel-overview" />;
 }

@@ -88,8 +88,8 @@ export const SettingsInterface: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center space-y-2">
+      <div data-name="settings-loading" className="flex items-center justify-center h-64">
+        <div data-name="settings-loading-content" className="text-center space-y-2">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
           <p className="text-muted-foreground">{t("settings.loading")}</p>
         </div>
@@ -98,7 +98,7 @@ export const SettingsInterface: React.FC = () => {
   }
 
   return (
-    <div className="flex max-md:flex-col h-screen bg-background w-full">
+    <div data-name="settings-interface" className="flex max-md:flex-col h-screen bg-background w-full">
       <SettingsSidebar
         activeTab={settings.activeTab}
         onTabChange={setActiveTab}
@@ -106,14 +106,14 @@ export const SettingsInterface: React.FC = () => {
         language={settings.appearance.language}
       />
 
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-auto">
-          <div className="p-6">{renderActiveTab()}</div>
+      <div data-name="settings-main-content" className="flex-1 flex flex-col">
+        <div data-name="settings-tab-panel" className="flex-1 overflow-auto">
+          <div data-name="settings-tab-content" className="p-6">{renderActiveTab()}</div>
         </div>
 
         {settings.hasUnsavedChanges && (
-          <div className="border-t bg-background p-4">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div data-name="settings-unsaved-bar" className="border-t bg-background p-4">
+            <div data-name="settings-unsaved-actions" className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-sm text-muted-foreground">{t("settings.unsaved")}</p>
               <div className="flex space-x-2">
                 <SaveButton

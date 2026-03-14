@@ -23,12 +23,19 @@ export const defaultProfile: UserProfile = {
   phone: "+1 (555) 123-4567",
   timezone: "UTC",
   avatar: "",
+  location: "",
   streetAddress: "",
   city: "",
   state: "",
   postalCode: "",
   countryCode: "",
   country: "",
+  socialProfiles: {
+    twitter: "",
+    linkedin: "",
+    github: "",
+    telegram: "",
+  },
 }
 
 export const defaultSecuritySettings: SecuritySettings = {

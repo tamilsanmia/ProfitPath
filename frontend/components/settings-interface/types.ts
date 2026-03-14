@@ -8,12 +8,22 @@ export interface UserProfile {
   phone: string
   timezone: string
   avatar: string
+  location: string
   streetAddress: string
   city: string
   state: string
   postalCode: string
   countryCode: string
   country: string
+  socialProfiles: {
+    twitter: string
+    linkedin: string
+    github: string
+    telegram: string
+  }
+  company?: string
+  position?: string
+  experience?: string
 }
 
 export interface SecuritySettings {

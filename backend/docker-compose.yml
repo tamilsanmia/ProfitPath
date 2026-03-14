@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: profitpath-backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -31,8 +31,12 @@ services:
     volumes:
       - ./app:/app/app
       - ./storage/profile-pictures:/app/storage/profile-pictures
+      - ../.ssh/do:/run/secrets/deploy_ssh_key:ro
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+    networks:
+      - default
+      - freqaipro_net
 
   postgres:
     image: postgres:16-alpine
@@ -67,10 +71,15 @@ services:
     image: axllent/mailpit:latest
     container_name: profitpath-mailpit
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  freqaipro_net:
+    external: true
+    name: freqaipro-config_default

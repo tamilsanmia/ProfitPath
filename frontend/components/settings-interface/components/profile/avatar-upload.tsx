@@ -17,6 +17,7 @@ interface AvatarUploadProps {
 
 export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userName, onAvatarChange, language }) => {
   const t = createSettingsTranslator(language)
+  const hasAvatar = currentAvatar.trim() !== "" && currentAvatar.trim() !== "/placeholder-user.jpg"
 
     const resolveAvatarSrc = (value: string): string | undefined => {
       const normalized = value.trim()
@@ -30,6 +31,25 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userN
 
       let resolved = normalized
       if (typeof window !== "undefined") {
+        if (resolved.includes("/media/profile-pictures/")) {
+          const marker = "/media/profile-pictures/"
+          const markerIndex = resolved.indexOf(marker)
+          const rawPath = markerIndex >= 0 ? resolved.slice(markerIndex + marker.length) : ""
+          const fileName = rawPath.split("/")[0].split("?")[0].trim()
+          if (fileName) {
+            return `/api/profile/avatar-file?file=${encodeURIComponent(fileName)}&v=${Date.now()}`
+          }
+
+          try {
+            const parsed = new URL(resolved)
+            resolved = `${window.location.origin}${parsed.pathname}`
+          } catch {
+            if (markerIndex >= 0) {
+              resolved = `${window.location.origin}${resolved.slice(markerIndex)}`
+            }
+          }
+        }
+
         resolved = resolved
           .replace(/^https?:\/\/localhost:\d+/i, window.location.origin)
           .replace(/^https?:\/\/host\.docker\.internal:\d+/i, window.location.origin)
@@ -67,10 +87,15 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userN
       const formData = new FormData()
       formData.append("file", file)
 
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), 20_000)
+
       const response = await fetch("/api/profile/avatar", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       })
+      window.clearTimeout(timeout)
       const payload = await response.json()
       if (!response.ok) {
         toast.error(payload?.error ?? t("profile.avatar.uploadFailed"))
@@ -80,8 +105,12 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userN
       onAvatarChange(String(payload?.avatarUrl ?? ""))
 
       toast.success(t("profile.avatar.updated"))
-    } catch {
-      toast.error(t("profile.avatar.uploadFailed"))
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        toast.error("Avatar upload timed out. Please try again.")
+      } else {
+        toast.error(t("profile.avatar.uploadFailed"))
+      }
     } finally {
       setIsUploading(false)
     }
@@ -92,6 +121,8 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userN
   }
 
   const handleRemoveAvatar = async () => {
+    if (!hasAvatar) return
+
     setIsUploading(true)
     try {
       const response = await fetch("/api/profile/avatar", { method: "DELETE" })
@@ -144,12 +175,12 @@ export const AvatarUpload: React.FC<AvatarUploadProps> = ({ currentAvatar, userN
             ) : (
               <>
                 <Camera className="mr-2 h-4 w-4" />
-                {t("profile.avatar.change")}
+                {hasAvatar ? t("profile.avatar.change") : t("profile.avatar.upload")}
               </>
             )}
           </Button>
 
-          <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={isUploading}>
+          <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={isUploading || !hasAvatar}>
             <Trash2 className="mr-2 h-4 w-4" />
             {t("profile.avatar.remove")}
           </Button>

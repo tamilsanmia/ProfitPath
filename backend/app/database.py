@@ -179,6 +179,50 @@ def init_db() -> None:
                 )
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bot_accounts (
+                    bot_id TEXT PRIMARY KEY,
+                    bot_name TEXT NOT NULL,
+                    freqtrade_url TEXT,
+                    owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    purchased BOOLEAN NOT NULL DEFAULT FALSE,
+                    exchange TEXT,
+                    model TEXT,
+                    capital_usdt DOUBLE PRECISION,
+                    billing_cycle_days INTEGER,
+                    setup_charge_usd DOUBLE PRECISION,
+                    monthly_server_fee_usd DOUBLE PRECISION NOT NULL DEFAULT 10,
+                    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    config_json JSONB,
+                    profit_json JSONB,
+                    balance_json JSONB,
+                    status_json JSONB,
+                    trades_json JSONB,
+                    performance_json JSONB,
+                    daily_json JSONB,
+                    trade_detail_json JSONB,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS bot_accounts_purchased_idx ON bot_accounts (purchased)")
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS bot_setup_events (
+                    id BIGSERIAL PRIMARY KEY,
+                    bot_id TEXT NOT NULL REFERENCES bot_accounts(bot_id) ON DELETE CASCADE,
+                    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    step TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    extra_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+            cur.execute("CREATE INDEX IF NOT EXISTS bot_setup_events_bot_idx ON bot_setup_events (bot_id, created_at DESC)")
         conn.commit()
 
 
@@ -748,3 +792,414 @@ def get_bot_share_by_token(share_token: str) -> dict[str, Any] | None:
             row = cur.fetchone()
 
     return dict(row) if row else None
+
+
+def upsert_bot_account(
+    bot_id: str,
+    bot_name: str,
+    freqtrade_url: str | None = None,
+    owner_user_id: int | None = None,
+    purchased: bool = False,
+    metadata_json: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metadata_payload = metadata_json or {}
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bot_accounts (
+                    bot_id, bot_name, freqtrade_url, owner_user_id, purchased, metadata_json
+                )
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT (bot_id)
+                DO UPDATE SET
+                    bot_name = EXCLUDED.bot_name,
+                    freqtrade_url = COALESCE(EXCLUDED.freqtrade_url, bot_accounts.freqtrade_url),
+                    owner_user_id = COALESCE(EXCLUDED.owner_user_id, bot_accounts.owner_user_id),
+                    purchased = bot_accounts.purchased OR EXCLUDED.purchased,
+                    metadata_json = CASE
+                        WHEN EXCLUDED.metadata_json IS NULL THEN bot_accounts.metadata_json
+                        ELSE bot_accounts.metadata_json || EXCLUDED.metadata_json
+                    END,
+                    updated_at = NOW()
+                RETURNING *
+                """,
+                (bot_id, bot_name, freqtrade_url, owner_user_id, purchased, json.dumps(metadata_payload)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def list_bot_accounts() -> list[dict[str, Any]]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM bot_accounts
+                ORDER BY created_at DESC, bot_id DESC
+                """
+            )
+            rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_bot_account(bot_id: str) -> dict[str, Any] | None:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM bot_accounts
+                WHERE bot_id = %s
+                LIMIT 1
+                """,
+                (bot_id,),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_user_purchased_bot_account(user_id: int, bot_id: str) -> dict[str, Any] | None:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM bot_accounts
+                WHERE bot_id = %s
+                  AND owner_user_id = %s
+                  AND purchased = TRUE
+                LIMIT 1
+                """,
+                (bot_id, user_id),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def delete_user_purchased_bot_account(user_id: int, bot_id: str) -> bool:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM bot_accounts
+                WHERE bot_id = %s
+                  AND owner_user_id = %s
+                  AND purchased = TRUE
+                RETURNING bot_id
+                """,
+                (bot_id, user_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return row is not None
+
+
+def update_bot_setup_state(user_id: int, bot_id: str, setup_patch: dict[str, Any]) -> dict[str, Any] | None:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE bot_accounts
+                SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb,
+                    updated_at = NOW()
+                WHERE bot_id = %s
+                  AND owner_user_id = %s
+                  AND purchased = TRUE
+                RETURNING *
+                """,
+                (json.dumps(setup_patch), bot_id, user_id),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row) if row else None
+
+
+def upsert_bot_runtime_data(
+    bot_id: str,
+    *,
+    bot_name: str | None = None,
+    config_json: dict[str, Any] | None = None,
+    profit_json: dict[str, Any] | None = None,
+    balance_json: dict[str, Any] | None = None,
+    status_json: list[dict[str, Any]] | None = None,
+    trades_json: dict[str, Any] | list[Any] | None = None,
+    performance_json: list[dict[str, Any]] | None = None,
+    daily_json: list[dict[str, Any]] | None = None,
+    trade_detail_json: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bot_accounts (
+                    bot_id,
+                    bot_name,
+                    config_json,
+                    profit_json,
+                    balance_json,
+                    status_json,
+                    trades_json,
+                    performance_json,
+                    daily_json,
+                    trade_detail_json
+                )
+                VALUES (
+                    %s,
+                    %s,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb
+                )
+                ON CONFLICT (bot_id)
+                DO UPDATE SET
+                    bot_name = COALESCE(EXCLUDED.bot_name, bot_accounts.bot_name),
+                    config_json = COALESCE(EXCLUDED.config_json, bot_accounts.config_json),
+                    profit_json = COALESCE(EXCLUDED.profit_json, bot_accounts.profit_json),
+                    balance_json = COALESCE(EXCLUDED.balance_json, bot_accounts.balance_json),
+                    status_json = COALESCE(EXCLUDED.status_json, bot_accounts.status_json),
+                    trades_json = COALESCE(EXCLUDED.trades_json, bot_accounts.trades_json),
+                    performance_json = COALESCE(EXCLUDED.performance_json, bot_accounts.performance_json),
+                    daily_json = COALESCE(EXCLUDED.daily_json, bot_accounts.daily_json),
+                    trade_detail_json = COALESCE(EXCLUDED.trade_detail_json, bot_accounts.trade_detail_json),
+                    updated_at = NOW()
+                RETURNING *
+                """,
+                (
+                    bot_id,
+                    bot_name or bot_id,
+                    json.dumps(config_json) if config_json is not None else None,
+                    json.dumps(profit_json) if profit_json is not None else None,
+                    json.dumps(balance_json) if balance_json is not None else None,
+                    json.dumps(status_json) if status_json is not None else None,
+                    json.dumps(trades_json) if trades_json is not None else None,
+                    json.dumps(performance_json) if performance_json is not None else None,
+                    json.dumps(daily_json) if daily_json is not None else None,
+                    json.dumps(trade_detail_json) if trade_detail_json is not None else None,
+                ),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def create_purchased_bot_account(
+    *,
+    owner_user_id: int,
+    freqtrade_url: str | None = None,
+    exchange: str,
+    model: str,
+    capital_usdt: float,
+    billing_cycle_days: int,
+    setup_charge_usd: float,
+    monthly_server_fee_usd: float,
+    metadata_json: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metadata_payload = metadata_json or {}
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            bot_id = ""
+            for _ in range(8):
+                candidate_num = uuid4().int % 100000000
+                candidate = f"bot-{candidate_num:08d}"
+                cur.execute("SELECT 1 FROM bot_accounts WHERE bot_id = %s LIMIT 1", (candidate,))
+                if cur.fetchone() is None:
+                    bot_id = candidate
+                    break
+
+            if not bot_id:
+                raise RuntimeError("Failed to allocate unique bot id")
+
+            account_type = str(metadata_payload.get("account_type") or "real").strip().lower()
+            is_demo = account_type == "demo"
+
+            trade_type_raw = str(metadata_payload.get("trade_type") or model or "compound").strip().lower()
+            is_fixed = "fixed" in trade_type_raw
+
+            dca_mode_raw = str(metadata_payload.get("dca_mode") or "Disable").strip().lower()
+            dca_enabled = dca_mode_raw in {"enable", "enabled", "with_dca", "with dca", "true", "1", "yes"}
+
+            stake_amount_value = 50.0
+            raw_stake = metadata_payload.get("stake_amount")
+            if raw_stake is not None:
+                try:
+                    parsed_stake = float(raw_stake)
+                    if parsed_stake > 0:
+                        stake_amount_value = parsed_stake
+                except (TypeError, ValueError):
+                    pass
+            stake_amount = f"{stake_amount_value:g}" if is_fixed else "unlimited"
+
+            max_open_order = 15
+            raw_max_open_order = metadata_payload.get("max_open_order")
+            if raw_max_open_order is not None:
+                try:
+                    max_open_order = int(raw_max_open_order)
+                except (TypeError, ValueError):
+                    max_open_order = 15
+            max_open_order = max(5, min(15, max_open_order))
+
+            bot_name = f"{model} {exchange} Bot"
+            exchange_normalized = str(exchange or "").strip().lower()
+            exchange_name = "bybit" if "bybit" in exchange_normalized else "binance"
+            stake_currency = "USDT"
+            initial_config = {
+                "bot_name": bot_name,
+                "strategy": "pending_setup",
+                "state": "pending_setup",
+                "runmode": "dry_run" if is_demo else "live",
+                "stake_currency": stake_currency,
+                "stake_amount": stake_amount,
+                "max_open_trades": max_open_order,
+                "timeframe": "n/a",
+                "dry_run": is_demo,
+                "dry_run_wallet": capital_usdt if is_demo else 0,
+                "exchange": exchange_name,
+                "position_adjustment_enable": dca_enabled,
+            }
+            initial_profit = {
+                "profit_closed_fiat": 0,
+                "profit_closed_percent": 0,
+                "trade_count": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "winrate": 0,
+                "first_trade_date": None,
+                "latest_trade_date": None,
+            }
+            initial_balance = {
+                "currencies": [
+                    {
+                        "currency": stake_currency,
+                        "balance": capital_usdt,
+                        "free": capital_usdt,
+                        "used": 0,
+                        "is_bot_managed": True,
+                        "is_position": False,
+                    }
+                ]
+            }
+            initial_status: list[dict[str, Any]] = []
+            initial_trades = {"trades": [], "trades_count": 0, "offset": 0, "total_trades": 0}
+            initial_performance: list[dict[str, Any]] = []
+            initial_daily: list[dict[str, Any]] = []
+
+            cur.execute(
+                """
+                INSERT INTO bot_accounts (
+                    bot_id,
+                    bot_name,
+                    freqtrade_url,
+                    owner_user_id,
+                    purchased,
+                    exchange,
+                    model,
+                    capital_usdt,
+                    billing_cycle_days,
+                    setup_charge_usd,
+                    monthly_server_fee_usd,
+                    metadata_json,
+                    config_json,
+                    profit_json,
+                    balance_json,
+                    status_json,
+                    trades_json,
+                    performance_json,
+                    daily_json
+                )
+                VALUES (
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    TRUE,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb,
+                    %s::jsonb
+                )
+                RETURNING *
+                """,
+                (
+                    bot_id,
+                    bot_name,
+                    freqtrade_url,
+                    owner_user_id,
+                    exchange,
+                    model,
+                    capital_usdt,
+                    billing_cycle_days,
+                    setup_charge_usd,
+                    monthly_server_fee_usd,
+                    json.dumps(metadata_payload),
+                    json.dumps(initial_config),
+                    json.dumps(initial_profit),
+                    json.dumps(initial_balance),
+                    json.dumps(initial_status),
+                    json.dumps(initial_trades),
+                    json.dumps(initial_performance),
+                    json.dumps(initial_daily),
+                ),
+            )
+            row = cur.fetchone()
+        conn.commit()
+
+    return dict(row)
+
+
+def create_bot_setup_event(
+    *,
+    bot_id: str,
+    owner_user_id: int,
+    step: str,
+    status: str,
+    message: str,
+    extra_json: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    extra_payload = extra_json or {}
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO bot_setup_events (bot_id, owner_user_id, step, status, message, extra_json)
+                VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                RETURNING id, bot_id, owner_user_id, step, status, message, extra_json, created_at
+                """,
+                (bot_id, owner_user_id, step, status, message, json.dumps(extra_payload)),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return dict(row)
+
+
+def list_bot_setup_events(owner_user_id: int, bot_id: str) -> list[dict[str, Any]]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, bot_id, owner_user_id, step, status, message, extra_json, created_at
+                FROM bot_setup_events
+                WHERE owner_user_id = %s AND bot_id = %s
+                ORDER BY created_at ASC, id ASC
+                """,
+                (owner_user_id, bot_id),
+            )
+            rows = cur.fetchall()
+    return [dict(row) for row in rows]

@@ -27,15 +27,15 @@ export default async function ProfilePage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
+    <div data-name="page-dashboard-profile" className="space-y-4">
+      <div data-name="profile-header">
         <h1 className="text-2xl font-semibold">Profile</h1>
         <p className="text-muted-foreground">View your current logged-in account details.</p>
       </div>
 
-      <div className="rounded-md border p-4">
+      <div data-name="profile-details-card" className="rounded-md border p-4">
         {user ? (
-          <dl className="grid gap-3 sm:grid-cols-2">
+          <dl data-name="profile-details-grid" className="grid gap-3 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-muted-foreground">First Name</dt>
               <dd className="text-sm font-medium">{user.first_name}</dd>

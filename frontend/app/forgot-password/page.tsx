@@ -48,17 +48,17 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
-      <div className="mx-auto w-full max-w-[384px]">
-      <div className="mb-9 text-center">
+    <div data-name="page-auth-forgot-password" className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
+      <div data-name="forgot-password-container" className="mx-auto w-full max-w-[384px]">
+      <div data-name="forgot-password-brand-header" className="mb-9 text-center">
         <p className="text-[35px] leading-none font-bold tracking-tight text-white">ProfitPath</p>
       </div>
-      <Card className="border-0 bg-transparent shadow-none">
+      <Card data-name="forgot-password-card" className="border-0 bg-transparent shadow-none">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="pb-[5px] text-[20px] leading-none font-semibold tracking-tight text-white text-center">Forgot Password</CardTitle>
         </CardHeader>
-        <CardContent className="px-0">
-          <form className="grid gap-4" onSubmit={onSubmit}>
+        <CardContent data-name="forgot-password-card-content" className="px-0">
+          <form data-name="forgot-password-form" className="grid gap-4" onSubmit={onSubmit}>
             <div className="grid gap-2">
               <Label htmlFor="email" className="text-[14px] font-semibold text-[#e7ecfa]">Email address</Label>
               <Input id="email" name="email" type="email" placeholder="" className={controlClass} required />

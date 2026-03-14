@@ -52,6 +52,16 @@ export function DashboardSidebar({ collapsed }: Props) {
 
     let resolved = normalized;
     if (typeof window !== "undefined") {
+      if (resolved.includes("/media/profile-pictures/")) {
+        const marker = "/media/profile-pictures/";
+        const markerIndex = resolved.indexOf(marker);
+        const rawPath = markerIndex >= 0 ? resolved.slice(markerIndex + marker.length) : "";
+        const fileName = rawPath.split("/")[0].split("?")[0].trim();
+        if (fileName) {
+          return `/api/profile/avatar-file?file=${encodeURIComponent(fileName)}&v=${Date.now()}`;
+        }
+      }
+
       resolved = resolved
         .replace(/^https?:\/\/localhost:\d+/i, window.location.origin)
         .replace(/^https?:\/\/host\.docker\.internal:\d+/i, window.location.origin);
