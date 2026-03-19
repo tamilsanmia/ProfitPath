@@ -422,6 +422,56 @@ class DeployBotSetupPayload(BaseModel):
     api_secret: str | None = None
 
 
+class UpdateBotSetupSettingsPayload(BaseModel):
+    email: EmailStr
+    session_token: str
+    trade_type: str
+    dca_mode: str
+    stake_amount: float | None = None
+    max_open_order: int
+    stoploss_pct: float
+    dca_stoploss_pct: float
+    entry_5m_enabled: bool = True
+    entry_15m_enabled: bool = False
+    entry_30m_enabled: bool = False
+    entry_1h_enabled: bool = False
+    entry_4h_enabled: bool = False
+    use_chg_filter: bool = True
+    chg_5m_enabled: bool = True
+    chg_15m_enabled: bool = True
+    chg_30m_enabled: bool = True
+    chg_1h_enabled: bool = True
+    chg_4h_enabled: bool = True
+    chg_5m_min: float = -10.0
+    chg_5m_max: float = 10.0
+    chg_15m_min: float = -10.0
+    chg_15m_max: float = 10.0
+    chg_30m_min: float = -10.0
+    chg_30m_max: float = 10.0
+    chg_1h_min: float = -10.0
+    chg_1h_max: float = 10.0
+    chg_4h_min: float = -10.0
+    chg_4h_max: float = 10.0
+    dca_chg_5m_min: float = -5.0
+    dca_chg_5m_max: float = 5.0
+    dca_chg_15m_min: float = -10.0
+    dca_chg_15m_max: float = 10.0
+    dca_chg_30m_min: float = -10.0
+    dca_chg_30m_max: float = 10.0
+    dca_chg_1h_min: float = -10.0
+    dca_chg_1h_max: float = 10.0
+    dca_chg_4h_min: float = -10.0
+    dca_chg_4h_max: float = 10.0
+    chg_5m_exit_buffer: float = 2.0
+    chg_15m_exit_buffer: float = 2.0
+    chg_30m_exit_buffer: float = 2.0
+    chg_1h_exit_buffer: float = 2.0
+    chg_4h_exit_buffer: float = 2.0
+    dca_reentry_min_profit: float = -0.05
+    dca_reentry_max_drawdown: float = -0.3
+    leverage: float
+
+
 class EmailSessionPayload(BaseModel):
     email: EmailStr
     session_token: str
@@ -497,6 +547,7 @@ def _build_setup_state_payload(bot_row: dict[str, Any], history: list[dict[str, 
         "exchange": metadata.get("setup_exchange") or bot_row.get("exchange"),
         "last_error": metadata.get("setup_last_error", ""),
         "completed_at": metadata.get("setup_completed_at"),
+        "strategy_settings": _normalize_strategy_settings(bot_row),
         "history": normalized_history,
     }
 
@@ -626,6 +677,152 @@ def _normalize_trade_type(value: str) -> str:
 def _is_dca_enabled(value: str) -> bool:
     normalized = str(value or "").strip().lower()
     return normalized in {"enable", "enabled", "with_dca", "with dca", "true", "1", "yes"}
+
+
+def _normalize_loss_pct(value: Any, *, default_pct: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = float(default_pct)
+
+    # Accept both ratio form (-0.5) and percent form (-50).
+    if -1.0 <= parsed < 0:
+        parsed *= 100
+
+    if parsed > 0:
+        parsed = -abs(parsed)
+
+    return max(-100.0, min(-1.0, parsed))
+
+
+def _normalize_bounded_float(value: Any, *, default_value: float, min_value: float, max_value: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = float(default_value)
+    return max(min_value, min(max_value, parsed))
+
+
+def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
+    metadata = _setup_metadata(bot_row)
+
+    trade_type = _normalize_trade_type(str(metadata.get("trade_type") or bot_row.get("model") or "compound"))
+    dca_enabled = _is_dca_enabled(str(metadata.get("dca_mode") or "Disable"))
+
+    stake_amount = 50.0
+    try:
+        candidate = float(metadata.get("stake_amount"))
+        if candidate > 0:
+            stake_amount = candidate
+    except (TypeError, ValueError):
+        pass
+
+    max_open_order = 15
+    try:
+        max_open_order = int(metadata.get("max_open_order") or 15)
+    except (TypeError, ValueError):
+        max_open_order = 15
+    max_open_order = max(1, min(100, max_open_order))
+
+    stoploss_pct = _normalize_loss_pct(metadata.get("stoploss_pct"), default_pct=-99.0)
+    dca_stoploss_pct = _normalize_loss_pct(metadata.get("dca_stoploss_pct"), default_pct=-50.0)
+
+    leverage = 5.0
+    try:
+        leverage = float(metadata.get("leverage") or 5.0)
+    except (TypeError, ValueError):
+        leverage = 5.0
+    leverage = max(1.0, min(125.0, leverage))
+
+    def _read_bool(key: str, default: bool) -> bool:
+        raw = metadata.get(key)
+        if raw is None:
+            return default
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"true", "1", "yes", "on", "enable", "enabled"}
+        return bool(raw)
+
+    chg_5m_min = _normalize_bounded_float(metadata.get("chg_5m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_5m_max = _normalize_bounded_float(metadata.get("chg_5m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    chg_15m_min = _normalize_bounded_float(metadata.get("chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_15m_max = _normalize_bounded_float(metadata.get("chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    chg_30m_min = _normalize_bounded_float(metadata.get("chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_30m_max = _normalize_bounded_float(metadata.get("chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    chg_1h_min = _normalize_bounded_float(metadata.get("chg_1h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_1h_max = _normalize_bounded_float(metadata.get("chg_1h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    chg_4h_min = _normalize_bounded_float(metadata.get("chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_4h_max = _normalize_bounded_float(metadata.get("chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+
+    dca_chg_5m_min = _normalize_bounded_float(metadata.get("dca_chg_5m_min"), default_value=-5.0, min_value=-100.0, max_value=100.0)
+    dca_chg_5m_max = _normalize_bounded_float(metadata.get("dca_chg_5m_max"), default_value=5.0, min_value=-100.0, max_value=100.0)
+    dca_chg_15m_min = _normalize_bounded_float(metadata.get("dca_chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_15m_max = _normalize_bounded_float(metadata.get("dca_chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_30m_min = _normalize_bounded_float(metadata.get("dca_chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_30m_max = _normalize_bounded_float(metadata.get("dca_chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_1h_min = _normalize_bounded_float(metadata.get("dca_chg_1h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_1h_max = _normalize_bounded_float(metadata.get("dca_chg_1h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_4h_min = _normalize_bounded_float(metadata.get("dca_chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_4h_max = _normalize_bounded_float(metadata.get("dca_chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+
+    chg_5m_exit_buffer = _normalize_bounded_float(metadata.get("chg_5m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+    chg_15m_exit_buffer = _normalize_bounded_float(metadata.get("chg_15m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+    chg_30m_exit_buffer = _normalize_bounded_float(metadata.get("chg_30m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+    chg_1h_exit_buffer = _normalize_bounded_float(metadata.get("chg_1h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+    chg_4h_exit_buffer = _normalize_bounded_float(metadata.get("chg_4h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+
+    dca_reentry_min_profit = _normalize_bounded_float(metadata.get("dca_reentry_min_profit"), default_value=-0.05, min_value=-1.0, max_value=0.0)
+    dca_reentry_max_drawdown = _normalize_bounded_float(metadata.get("dca_reentry_max_drawdown"), default_value=-0.3, min_value=-1.0, max_value=0.0)
+
+    return {
+        "trade_type": trade_type,
+        "dca_mode": "Enable" if dca_enabled else "Disable",
+        "dca_enabled": dca_enabled,
+        "stake_amount": stake_amount,
+        "max_open_order": max_open_order,
+        "stoploss_pct": stoploss_pct,
+        "dca_stoploss_pct": dca_stoploss_pct,
+        "entry_5m_enabled": _read_bool("entry_5m_enabled", True),
+        "entry_15m_enabled": _read_bool("entry_15m_enabled", False),
+        "entry_30m_enabled": _read_bool("entry_30m_enabled", False),
+        "entry_1h_enabled": _read_bool("entry_1h_enabled", False),
+        "entry_4h_enabled": _read_bool("entry_4h_enabled", False),
+        "use_chg_filter": _read_bool("use_chg_filter", True),
+        "chg_5m_enabled": _read_bool("chg_5m_enabled", True),
+        "chg_15m_enabled": _read_bool("chg_15m_enabled", True),
+        "chg_30m_enabled": _read_bool("chg_30m_enabled", True),
+        "chg_1h_enabled": _read_bool("chg_1h_enabled", True),
+        "chg_4h_enabled": _read_bool("chg_4h_enabled", True),
+        "chg_5m_min": chg_5m_min,
+        "chg_5m_max": chg_5m_max,
+        "chg_15m_min": chg_15m_min,
+        "chg_15m_max": chg_15m_max,
+        "chg_30m_min": chg_30m_min,
+        "chg_30m_max": chg_30m_max,
+        "chg_1h_min": chg_1h_min,
+        "chg_1h_max": chg_1h_max,
+        "chg_4h_min": chg_4h_min,
+        "chg_4h_max": chg_4h_max,
+        "dca_chg_5m_min": dca_chg_5m_min,
+        "dca_chg_5m_max": dca_chg_5m_max,
+        "dca_chg_15m_min": dca_chg_15m_min,
+        "dca_chg_15m_max": dca_chg_15m_max,
+        "dca_chg_30m_min": dca_chg_30m_min,
+        "dca_chg_30m_max": dca_chg_30m_max,
+        "dca_chg_1h_min": dca_chg_1h_min,
+        "dca_chg_1h_max": dca_chg_1h_max,
+        "dca_chg_4h_min": dca_chg_4h_min,
+        "dca_chg_4h_max": dca_chg_4h_max,
+        "chg_5m_exit_buffer": chg_5m_exit_buffer,
+        "chg_15m_exit_buffer": chg_15m_exit_buffer,
+        "chg_30m_exit_buffer": chg_30m_exit_buffer,
+        "chg_1h_exit_buffer": chg_1h_exit_buffer,
+        "chg_4h_exit_buffer": chg_4h_exit_buffer,
+        "dca_reentry_min_profit": dca_reentry_min_profit,
+        "dca_reentry_max_drawdown": dca_reentry_max_drawdown,
+        "leverage": leverage,
+    }
 
 
 def _get_user_exchange_api_credentials(user_id: int, exchange_key: str) -> tuple[str, str]:
@@ -1285,6 +1482,138 @@ def _apply_strategy_dca_mode(strategy_code: str, dca_enabled: bool) -> str:
     return f"position_adjustment_enable = {value}\n{normalized}"
 
 
+def _upsert_strategy_class_attr(strategy_code: str, attr_name: str, value_expr: str) -> str:
+    normalized = strategy_code if strategy_code.endswith("\n") else f"{strategy_code}\n"
+    attr_pattern = rf"(?m)^\s*{re.escape(attr_name)}\s*=.*$"
+    attr_line = f"    {attr_name} = {value_expr}"
+
+    if re.search(attr_pattern, normalized):
+        return re.sub(attr_pattern, attr_line, normalized, count=1)
+
+    class_match = re.search(r"(?m)^class\s+[A-Za-z_][A-Za-z0-9_]*\(IStrategy\):\s*$", normalized)
+    if class_match:
+        insert_at = class_match.end()
+        return f"{normalized[:insert_at]}\n{attr_line}{normalized[insert_at:]}"
+
+    return f"{attr_line}\n{normalized}"
+
+
+def _apply_strategy_runtime_settings(
+    strategy_code: str,
+    *,
+    dca_enabled: bool,
+    stoploss_value: float,
+    dca_stoploss_value: float,
+    leverage_value: float,
+    entry_5m_enabled: bool,
+    entry_15m_enabled: bool,
+    entry_30m_enabled: bool,
+    entry_1h_enabled: bool,
+    entry_4h_enabled: bool,
+    use_chg_filter: bool,
+    chg_5m_enabled: bool,
+    chg_15m_enabled: bool,
+    chg_30m_enabled: bool,
+    chg_1h_enabled: bool,
+    chg_4h_enabled: bool,
+    chg_5m_min: float,
+    chg_5m_max: float,
+    chg_15m_min: float,
+    chg_15m_max: float,
+    chg_30m_min: float,
+    chg_30m_max: float,
+    chg_1h_min: float,
+    chg_1h_max: float,
+    chg_4h_min: float,
+    chg_4h_max: float,
+    dca_chg_5m_min: float,
+    dca_chg_5m_max: float,
+    dca_chg_15m_min: float,
+    dca_chg_15m_max: float,
+    dca_chg_30m_min: float,
+    dca_chg_30m_max: float,
+    dca_chg_1h_min: float,
+    dca_chg_1h_max: float,
+    dca_chg_4h_min: float,
+    dca_chg_4h_max: float,
+    chg_5m_exit_buffer: float,
+    chg_15m_exit_buffer: float,
+    chg_30m_exit_buffer: float,
+    chg_1h_exit_buffer: float,
+    chg_4h_exit_buffer: float,
+    dca_reentry_min_profit: float,
+    dca_reentry_max_drawdown: float,
+) -> str:
+    updated = _apply_strategy_dca_mode(strategy_code, dca_enabled=dca_enabled)
+
+    def _fmt(value: float) -> str:
+        return f"{value:.6f}".rstrip("0").rstrip(".")
+
+    updated = _upsert_strategy_class_attr(updated, "stoploss", _fmt(stoploss_value))
+    updated = _upsert_strategy_class_attr(updated, "dca_stoploss", _fmt(dca_stoploss_value))
+    updated = _upsert_strategy_class_attr(updated, "leverage_value", _fmt(leverage_value))
+    updated = _upsert_strategy_class_attr(updated, "entry_5m_enabled", "True" if entry_5m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "entry_15m_enabled", "True" if entry_15m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "entry_30m_enabled", "True" if entry_30m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "entry_1h_enabled", "True" if entry_1h_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "entry_4h_enabled", "True" if entry_4h_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "use_chg_filter", "True" if use_chg_filter else "False")
+    updated = _upsert_strategy_class_attr(updated, "chg_5m_enabled", "True" if chg_5m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "chg_15m_enabled", "True" if chg_15m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "chg_30m_enabled", "True" if chg_30m_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "chg_1h_enabled", "True" if chg_1h_enabled else "False")
+    updated = _upsert_strategy_class_attr(updated, "chg_4h_enabled", "True" if chg_4h_enabled else "False")
+
+    updated = _upsert_strategy_class_attr(updated, "chg_5m_min", _fmt(chg_5m_min))
+    updated = _upsert_strategy_class_attr(updated, "chg_5m_max", _fmt(chg_5m_max))
+    updated = _upsert_strategy_class_attr(updated, "chg_15m_min", _fmt(chg_15m_min))
+    updated = _upsert_strategy_class_attr(updated, "chg_15m_max", _fmt(chg_15m_max))
+    updated = _upsert_strategy_class_attr(updated, "chg_30m_min", _fmt(chg_30m_min))
+    updated = _upsert_strategy_class_attr(updated, "chg_30m_max", _fmt(chg_30m_max))
+    updated = _upsert_strategy_class_attr(updated, "chg_1h_min", _fmt(chg_1h_min))
+    updated = _upsert_strategy_class_attr(updated, "chg_1h_max", _fmt(chg_1h_max))
+    updated = _upsert_strategy_class_attr(updated, "chg_4h_min", _fmt(chg_4h_min))
+    updated = _upsert_strategy_class_attr(updated, "chg_4h_max", _fmt(chg_4h_max))
+
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_5m_min", _fmt(dca_chg_5m_min))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_5m_max", _fmt(dca_chg_5m_max))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_15m_min", _fmt(dca_chg_15m_min))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_15m_max", _fmt(dca_chg_15m_max))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_min", _fmt(dca_chg_30m_min))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_max", _fmt(dca_chg_30m_max))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_1h_min", _fmt(dca_chg_1h_min))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_1h_max", _fmt(dca_chg_1h_max))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_min", _fmt(dca_chg_4h_min))
+    updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_max", _fmt(dca_chg_4h_max))
+
+    updated = _upsert_strategy_class_attr(updated, "chg_5m_exit_buffer", _fmt(chg_5m_exit_buffer))
+    updated = _upsert_strategy_class_attr(updated, "chg_15m_exit_buffer", _fmt(chg_15m_exit_buffer))
+    updated = _upsert_strategy_class_attr(updated, "chg_30m_exit_buffer", _fmt(chg_30m_exit_buffer))
+    updated = _upsert_strategy_class_attr(updated, "chg_1h_exit_buffer", _fmt(chg_1h_exit_buffer))
+    updated = _upsert_strategy_class_attr(updated, "chg_4h_exit_buffer", _fmt(chg_4h_exit_buffer))
+
+    updated = _upsert_strategy_class_attr(updated, "dca_reentry_min_profit", _fmt(dca_reentry_min_profit))
+    updated = _upsert_strategy_class_attr(updated, "dca_reentry_max_drawdown", _fmt(dca_reentry_max_drawdown))
+
+    updated = re.sub(
+        r"(?m)^\s*return\s+max\(min\(5\.0,\s*max_leverage\),\s*1\.0\)\s*$",
+        "        return max(min(self.leverage_value, max_leverage), 1.0)",
+        updated,
+        count=1,
+    )
+    updated = re.sub(
+        r"stoploss_from_open\(-0\.5\s*,\s*current_profit\)",
+        "stoploss_from_open(self.dca_stoploss, current_profit)",
+        updated,
+    )
+
+    updated = re.sub(r"(?m)^(\s*)signal_30m\s*=\s*\(", r"\1signal_30m = self.entry_30m_enabled and (", updated)
+    updated = re.sub(r"(?m)^(\s*)signal_1h\s*=\s*\(", r"\1signal_1h = self.entry_1h_enabled and (", updated)
+    updated = re.sub(r"(?m)^(\s*)signal_4h\s*=\s*\(", r"\1signal_4h = self.entry_4h_enabled and (", updated)
+
+    return updated
+
+
 def _build_freqtrade_config(
     *,
     bot_id: str,
@@ -1465,6 +1794,47 @@ def _deploy_freqtrade_bundle(
     stake_amount: str,
     max_open_trades: int,
     dca_enabled: bool,
+    stoploss_value: float,
+    dca_stoploss_value: float,
+    leverage_value: float,
+    entry_5m_enabled: bool,
+    entry_15m_enabled: bool,
+    entry_30m_enabled: bool,
+    entry_1h_enabled: bool,
+    entry_4h_enabled: bool,
+    use_chg_filter: bool,
+    chg_5m_enabled: bool,
+    chg_15m_enabled: bool,
+    chg_30m_enabled: bool,
+    chg_1h_enabled: bool,
+    chg_4h_enabled: bool,
+    chg_5m_min: float,
+    chg_5m_max: float,
+    chg_15m_min: float,
+    chg_15m_max: float,
+    chg_30m_min: float,
+    chg_30m_max: float,
+    chg_1h_min: float,
+    chg_1h_max: float,
+    chg_4h_min: float,
+    chg_4h_max: float,
+    dca_chg_5m_min: float,
+    dca_chg_5m_max: float,
+    dca_chg_15m_min: float,
+    dca_chg_15m_max: float,
+    dca_chg_30m_min: float,
+    dca_chg_30m_max: float,
+    dca_chg_1h_min: float,
+    dca_chg_1h_max: float,
+    dca_chg_4h_min: float,
+    dca_chg_4h_max: float,
+    chg_5m_exit_buffer: float,
+    chg_15m_exit_buffer: float,
+    chg_30m_exit_buffer: float,
+    chg_1h_exit_buffer: float,
+    chg_4h_exit_buffer: float,
+    dca_reentry_min_profit: float,
+    dca_reentry_max_drawdown: float,
     reset_user_data: bool = False,
 ) -> dict[str, Any]:
     deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/profitpath-freqtrade").strip() or "/opt/profitpath-freqtrade"
@@ -1488,7 +1858,51 @@ def _deploy_freqtrade_bundle(
         override=config_override,
     )
     raw_strategy = strategy_code.strip() if isinstance(strategy_code, str) and strategy_code.strip() else _default_strategy_code(strategy)
-    strategy_payload = _apply_strategy_dca_mode(raw_strategy, dca_enabled=dca_enabled)
+    strategy_payload = _apply_strategy_runtime_settings(
+        raw_strategy,
+        dca_enabled=dca_enabled,
+        stoploss_value=stoploss_value,
+        dca_stoploss_value=dca_stoploss_value,
+        leverage_value=leverage_value,
+        entry_5m_enabled=entry_5m_enabled,
+        entry_15m_enabled=entry_15m_enabled,
+        entry_30m_enabled=entry_30m_enabled,
+        entry_1h_enabled=entry_1h_enabled,
+        entry_4h_enabled=entry_4h_enabled,
+        use_chg_filter=use_chg_filter,
+        chg_5m_enabled=chg_5m_enabled,
+        chg_15m_enabled=chg_15m_enabled,
+        chg_30m_enabled=chg_30m_enabled,
+        chg_1h_enabled=chg_1h_enabled,
+        chg_4h_enabled=chg_4h_enabled,
+        chg_5m_min=chg_5m_min,
+        chg_5m_max=chg_5m_max,
+        chg_15m_min=chg_15m_min,
+        chg_15m_max=chg_15m_max,
+        chg_30m_min=chg_30m_min,
+        chg_30m_max=chg_30m_max,
+        chg_1h_min=chg_1h_min,
+        chg_1h_max=chg_1h_max,
+        chg_4h_min=chg_4h_min,
+        chg_4h_max=chg_4h_max,
+        dca_chg_5m_min=dca_chg_5m_min,
+        dca_chg_5m_max=dca_chg_5m_max,
+        dca_chg_15m_min=dca_chg_15m_min,
+        dca_chg_15m_max=dca_chg_15m_max,
+        dca_chg_30m_min=dca_chg_30m_min,
+        dca_chg_30m_max=dca_chg_30m_max,
+        dca_chg_1h_min=dca_chg_1h_min,
+        dca_chg_1h_max=dca_chg_1h_max,
+        dca_chg_4h_min=dca_chg_4h_min,
+        dca_chg_4h_max=dca_chg_4h_max,
+        chg_5m_exit_buffer=chg_5m_exit_buffer,
+        chg_15m_exit_buffer=chg_15m_exit_buffer,
+        chg_30m_exit_buffer=chg_30m_exit_buffer,
+        chg_1h_exit_buffer=chg_1h_exit_buffer,
+        chg_4h_exit_buffer=chg_4h_exit_buffer,
+        dca_reentry_min_profit=dca_reentry_min_profit,
+        dca_reentry_max_drawdown=dca_reentry_max_drawdown,
+    )
 
     compose_yaml = f'''services:\n  freqtrade:\n    image: {image}\n    container_name: pp-freqtrade-{bot_id[-8:]}\n    restart: unless-stopped\n    ports:\n      - "{api_port}:8080"\n    volumes:\n      - ./user_data:/freqtrade/user_data\n    command: >\n      trade\n      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite\n      --config /freqtrade/user_data/config.json\n      --strategy {strategy}\n'''
 
@@ -1529,7 +1943,7 @@ def _deploy_freqtrade_bundle(
             )
 
         _copy_directory_to_server(server_ip, temp_dir, deploy_dir)
-        _run_remote_command(server_ip, f"cd {shlex.quote(deploy_dir)} && docker compose pull && docker compose up -d", timeout=600)
+        _run_remote_command(server_ip, f"cd {shlex.quote(deploy_dir)} && docker compose pull && docker compose up -d --force-recreate", timeout=600)
         _run_remote_command(
             server_ip,
             (
@@ -2086,7 +2500,7 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
         stake_amount = parsed_stake
 
     max_open_order = int(payload.max_open_order if payload.max_open_order is not None else 15)
-    max_open_order = max(5, min(15, max_open_order))
+    max_open_order = max(1, min(100, max_open_order))
 
     freqtrade_urls = [s.strip() for s in str(settings.freqtrade_urls).split(",") if s.strip()]
     default_freqtrade_url = freqtrade_urls[0] if freqtrade_urls else None
@@ -2110,6 +2524,47 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
                 "dca_enabled": dca_enabled,
                 "stake_amount": stake_amount,
                 "max_open_order": max_open_order,
+                "stoploss_pct": -99,
+                "dca_stoploss_pct": -50,
+                "entry_5m_enabled": True,
+                "entry_15m_enabled": False,
+                "entry_30m_enabled": False,
+                "entry_1h_enabled": False,
+                "entry_4h_enabled": False,
+                "use_chg_filter": True,
+                "chg_5m_enabled": True,
+                "chg_15m_enabled": True,
+                "chg_30m_enabled": True,
+                "chg_1h_enabled": True,
+                "chg_4h_enabled": True,
+                "chg_5m_min": -10.0,
+                "chg_5m_max": 10.0,
+                "chg_15m_min": -10.0,
+                "chg_15m_max": 10.0,
+                "chg_30m_min": -10.0,
+                "chg_30m_max": 10.0,
+                "chg_1h_min": -10.0,
+                "chg_1h_max": 10.0,
+                "chg_4h_min": -10.0,
+                "chg_4h_max": 10.0,
+                "dca_chg_5m_min": -5.0,
+                "dca_chg_5m_max": 5.0,
+                "dca_chg_15m_min": -10.0,
+                "dca_chg_15m_max": 10.0,
+                "dca_chg_30m_min": -10.0,
+                "dca_chg_30m_max": 10.0,
+                "dca_chg_1h_min": -10.0,
+                "dca_chg_1h_max": 10.0,
+                "dca_chg_4h_min": -10.0,
+                "dca_chg_4h_max": 10.0,
+                "chg_5m_exit_buffer": 2.0,
+                "chg_15m_exit_buffer": 2.0,
+                "chg_30m_exit_buffer": 2.0,
+                "chg_1h_exit_buffer": 2.0,
+                "chg_4h_exit_buffer": 2.0,
+                "dca_reentry_min_profit": -0.05,
+                "dca_reentry_max_drawdown": -0.3,
+                "leverage": 5,
             },
         )
     except Exception as exc:
@@ -2519,24 +2974,55 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
         raise HTTPException(status_code=400, detail="Unsupported exchange for deployment")
 
     account_type = _normalize_account_type(str(metadata.get("account_type") or "real"))
-    trade_type = _normalize_trade_type(str(metadata.get("trade_type") or bot_row.get("model") or "compound"))
-    dca_mode = str(metadata.get("dca_mode") or "Disable")
-    dca_enabled = _is_dca_enabled(dca_mode)
+    strategy_settings = _normalize_strategy_settings(bot_row)
+    trade_type = str(strategy_settings["trade_type"])
+    dca_enabled = bool(strategy_settings["dca_enabled"])
     capital_usdt = float(bot_row.get("capital_usdt") or 0)
 
-    stake_amount_raw = metadata.get("stake_amount")
-    stake_amount_value = 50.0
-    if stake_amount_raw is not None:
-        try:
-            candidate = float(stake_amount_raw)
-            if candidate > 0:
-                stake_amount_value = candidate
-        except (TypeError, ValueError):
-            pass
-
+    stake_amount_value = float(strategy_settings["stake_amount"])
     stake_amount = f"{stake_amount_value:g}" if trade_type == "fixed" else "unlimited"
-    max_open_trades = int(metadata.get("max_open_order") or 15)
-    max_open_trades = max(5, min(15, max_open_trades))
+    max_open_trades = int(strategy_settings["max_open_order"])
+    stoploss_value = float(strategy_settings["stoploss_pct"]) / 100.0
+    dca_stoploss_value = float(strategy_settings["dca_stoploss_pct"]) / 100.0
+    leverage_value = float(strategy_settings["leverage"])
+    entry_5m_enabled = bool(strategy_settings["entry_5m_enabled"])
+    entry_15m_enabled = bool(strategy_settings["entry_15m_enabled"])
+    entry_30m_enabled = bool(strategy_settings["entry_30m_enabled"])
+    entry_1h_enabled = bool(strategy_settings["entry_1h_enabled"])
+    entry_4h_enabled = bool(strategy_settings["entry_4h_enabled"])
+    use_chg_filter = bool(strategy_settings["use_chg_filter"])
+    chg_5m_enabled = bool(strategy_settings["chg_5m_enabled"])
+    chg_15m_enabled = bool(strategy_settings["chg_15m_enabled"])
+    chg_30m_enabled = bool(strategy_settings["chg_30m_enabled"])
+    chg_1h_enabled = bool(strategy_settings["chg_1h_enabled"])
+    chg_4h_enabled = bool(strategy_settings["chg_4h_enabled"])
+    chg_5m_min = float(strategy_settings["chg_5m_min"])
+    chg_5m_max = float(strategy_settings["chg_5m_max"])
+    chg_15m_min = float(strategy_settings["chg_15m_min"])
+    chg_15m_max = float(strategy_settings["chg_15m_max"])
+    chg_30m_min = float(strategy_settings["chg_30m_min"])
+    chg_30m_max = float(strategy_settings["chg_30m_max"])
+    chg_1h_min = float(strategy_settings["chg_1h_min"])
+    chg_1h_max = float(strategy_settings["chg_1h_max"])
+    chg_4h_min = float(strategy_settings["chg_4h_min"])
+    chg_4h_max = float(strategy_settings["chg_4h_max"])
+    dca_chg_5m_min = float(strategy_settings["dca_chg_5m_min"])
+    dca_chg_5m_max = float(strategy_settings["dca_chg_5m_max"])
+    dca_chg_15m_min = float(strategy_settings["dca_chg_15m_min"])
+    dca_chg_15m_max = float(strategy_settings["dca_chg_15m_max"])
+    dca_chg_30m_min = float(strategy_settings["dca_chg_30m_min"])
+    dca_chg_30m_max = float(strategy_settings["dca_chg_30m_max"])
+    dca_chg_1h_min = float(strategy_settings["dca_chg_1h_min"])
+    dca_chg_1h_max = float(strategy_settings["dca_chg_1h_max"])
+    dca_chg_4h_min = float(strategy_settings["dca_chg_4h_min"])
+    dca_chg_4h_max = float(strategy_settings["dca_chg_4h_max"])
+    chg_5m_exit_buffer = float(strategy_settings["chg_5m_exit_buffer"])
+    chg_15m_exit_buffer = float(strategy_settings["chg_15m_exit_buffer"])
+    chg_30m_exit_buffer = float(strategy_settings["chg_30m_exit_buffer"])
+    chg_1h_exit_buffer = float(strategy_settings["chg_1h_exit_buffer"])
+    chg_4h_exit_buffer = float(strategy_settings["chg_4h_exit_buffer"])
+    dca_reentry_min_profit = float(strategy_settings["dca_reentry_min_profit"])
+    dca_reentry_max_drawdown = float(strategy_settings["dca_reentry_max_drawdown"])
     previous_is_demo = account_type == "demo"
     if payload.dry_run is None:
         dry_run_mode = account_type == "demo"
@@ -2600,6 +3086,47 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
             stake_amount=stake_amount,
             max_open_trades=max_open_trades,
             dca_enabled=dca_enabled,
+            stoploss_value=stoploss_value,
+            dca_stoploss_value=dca_stoploss_value,
+            leverage_value=leverage_value,
+            entry_5m_enabled=entry_5m_enabled,
+            entry_15m_enabled=entry_15m_enabled,
+            entry_30m_enabled=entry_30m_enabled,
+            entry_1h_enabled=entry_1h_enabled,
+            entry_4h_enabled=entry_4h_enabled,
+            use_chg_filter=use_chg_filter,
+            chg_5m_enabled=chg_5m_enabled,
+            chg_15m_enabled=chg_15m_enabled,
+            chg_30m_enabled=chg_30m_enabled,
+            chg_1h_enabled=chg_1h_enabled,
+            chg_4h_enabled=chg_4h_enabled,
+            chg_5m_min=chg_5m_min,
+            chg_5m_max=chg_5m_max,
+            chg_15m_min=chg_15m_min,
+            chg_15m_max=chg_15m_max,
+            chg_30m_min=chg_30m_min,
+            chg_30m_max=chg_30m_max,
+            chg_1h_min=chg_1h_min,
+            chg_1h_max=chg_1h_max,
+            chg_4h_min=chg_4h_min,
+            chg_4h_max=chg_4h_max,
+            dca_chg_5m_min=dca_chg_5m_min,
+            dca_chg_5m_max=dca_chg_5m_max,
+            dca_chg_15m_min=dca_chg_15m_min,
+            dca_chg_15m_max=dca_chg_15m_max,
+            dca_chg_30m_min=dca_chg_30m_min,
+            dca_chg_30m_max=dca_chg_30m_max,
+            dca_chg_1h_min=dca_chg_1h_min,
+            dca_chg_1h_max=dca_chg_1h_max,
+            dca_chg_4h_min=dca_chg_4h_min,
+            dca_chg_4h_max=dca_chg_4h_max,
+            chg_5m_exit_buffer=chg_5m_exit_buffer,
+            chg_15m_exit_buffer=chg_15m_exit_buffer,
+            chg_30m_exit_buffer=chg_30m_exit_buffer,
+            chg_1h_exit_buffer=chg_1h_exit_buffer,
+            chg_4h_exit_buffer=chg_4h_exit_buffer,
+            dca_reentry_min_profit=dca_reentry_min_profit,
+            dca_reentry_max_drawdown=dca_reentry_max_drawdown,
             reset_user_data=mode_switched,
         )
     except HTTPException as exc:
@@ -2813,6 +3340,121 @@ def get_bot_setup_state(bot_id: str, email: EmailStr, session_token: str) -> dic
             "name": bot_row.get("bot_name") or bot_id,
         },
         "setup": _build_setup_state_payload(bot_row, history=history),
+    }
+
+
+@app.put("/subscriptions/{bot_id}/setup/settings")
+def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayload) -> dict[str, Any]:
+    user = get_user_or_404(str(payload.email))
+    _ = _validate_session_token_for_user(user["id"], payload.session_token)
+
+    bot_row = get_user_purchased_bot_account(user["id"], bot_id)
+    if not bot_row:
+        raise HTTPException(status_code=404, detail="Purchased bot not found for this user")
+
+    trade_type = _normalize_trade_type(payload.trade_type)
+    dca_enabled = _is_dca_enabled(payload.dca_mode)
+
+    stake_amount: float | None = None
+    if trade_type == "fixed":
+        if payload.stake_amount is None:
+            raise HTTPException(status_code=400, detail="Stake amount is required for Fixed trade type")
+        stake_amount = float(payload.stake_amount)
+        if stake_amount <= 0:
+            raise HTTPException(status_code=400, detail="Stake amount must be greater than 0")
+
+    max_open_order = int(payload.max_open_order)
+    if max_open_order < 1 or max_open_order > 100:
+        raise HTTPException(status_code=400, detail="Max open order must be between 1 and 100")
+
+    stoploss_pct = _normalize_loss_pct(payload.stoploss_pct, default_pct=-99.0)
+    dca_stoploss_pct = _normalize_loss_pct(payload.dca_stoploss_pct, default_pct=-50.0)
+
+    leverage = float(payload.leverage)
+    if leverage < 1 or leverage > 125:
+        raise HTTPException(status_code=400, detail="Leverage must be between 1 and 125")
+
+    def _clamp_chg(value: float) -> float:
+        return max(-100.0, min(100.0, float(value)))
+
+    def _clamp_buffer(value: float) -> float:
+        return max(0.0, min(100.0, float(value)))
+
+    dca_reentry_min_profit = max(-1.0, min(0.0, float(payload.dca_reentry_min_profit)))
+    dca_reentry_max_drawdown = max(-1.0, min(0.0, float(payload.dca_reentry_max_drawdown)))
+
+    patch: dict[str, Any] = {
+        "trade_type": trade_type,
+        "dca_mode": "Enable" if dca_enabled else "Disable",
+        "dca_enabled": dca_enabled,
+        "stake_amount": stake_amount,
+        "max_open_order": max_open_order,
+        "stoploss_pct": stoploss_pct,
+        "dca_stoploss_pct": dca_stoploss_pct,
+        "entry_5m_enabled": bool(payload.entry_5m_enabled),
+        "entry_15m_enabled": bool(payload.entry_15m_enabled),
+        "entry_30m_enabled": bool(payload.entry_30m_enabled),
+        "entry_1h_enabled": bool(payload.entry_1h_enabled),
+        "entry_4h_enabled": bool(payload.entry_4h_enabled),
+        "use_chg_filter": bool(payload.use_chg_filter),
+        "chg_5m_enabled": bool(payload.chg_5m_enabled),
+        "chg_15m_enabled": bool(payload.chg_15m_enabled),
+        "chg_30m_enabled": bool(payload.chg_30m_enabled),
+        "chg_1h_enabled": bool(payload.chg_1h_enabled),
+        "chg_4h_enabled": bool(payload.chg_4h_enabled),
+        "chg_5m_min": _clamp_chg(payload.chg_5m_min),
+        "chg_5m_max": _clamp_chg(payload.chg_5m_max),
+        "chg_15m_min": _clamp_chg(payload.chg_15m_min),
+        "chg_15m_max": _clamp_chg(payload.chg_15m_max),
+        "chg_30m_min": _clamp_chg(payload.chg_30m_min),
+        "chg_30m_max": _clamp_chg(payload.chg_30m_max),
+        "chg_1h_min": _clamp_chg(payload.chg_1h_min),
+        "chg_1h_max": _clamp_chg(payload.chg_1h_max),
+        "chg_4h_min": _clamp_chg(payload.chg_4h_min),
+        "chg_4h_max": _clamp_chg(payload.chg_4h_max),
+        "dca_chg_5m_min": _clamp_chg(payload.dca_chg_5m_min),
+        "dca_chg_5m_max": _clamp_chg(payload.dca_chg_5m_max),
+        "dca_chg_15m_min": _clamp_chg(payload.dca_chg_15m_min),
+        "dca_chg_15m_max": _clamp_chg(payload.dca_chg_15m_max),
+        "dca_chg_30m_min": _clamp_chg(payload.dca_chg_30m_min),
+        "dca_chg_30m_max": _clamp_chg(payload.dca_chg_30m_max),
+        "dca_chg_1h_min": _clamp_chg(payload.dca_chg_1h_min),
+        "dca_chg_1h_max": _clamp_chg(payload.dca_chg_1h_max),
+        "dca_chg_4h_min": _clamp_chg(payload.dca_chg_4h_min),
+        "dca_chg_4h_max": _clamp_chg(payload.dca_chg_4h_max),
+        "chg_5m_exit_buffer": _clamp_buffer(payload.chg_5m_exit_buffer),
+        "chg_15m_exit_buffer": _clamp_buffer(payload.chg_15m_exit_buffer),
+        "chg_30m_exit_buffer": _clamp_buffer(payload.chg_30m_exit_buffer),
+        "chg_1h_exit_buffer": _clamp_buffer(payload.chg_1h_exit_buffer),
+        "chg_4h_exit_buffer": _clamp_buffer(payload.chg_4h_exit_buffer),
+        "dca_reentry_min_profit": dca_reentry_min_profit,
+        "dca_reentry_max_drawdown": dca_reentry_max_drawdown,
+        "leverage": leverage,
+    }
+
+    updated = update_bot_setup_state(user["id"], bot_id, patch)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Purchased bot not found for this user")
+
+    history_rows = list_bot_setup_events(user["id"], bot_id)
+    history = [
+        {
+            "step": r.get("step"),
+            "status": r.get("status"),
+            "message": r.get("message"),
+            "timestamp": str(r.get("created_at") or ""),
+        }
+        for r in history_rows
+    ]
+
+    return {
+        "success": True,
+        "message": "Bot settings saved",
+        "bot": {
+            "id": bot_id,
+            "name": updated.get("bot_name") or bot_id,
+        },
+        "setup": _build_setup_state_payload(updated, history=history),
     }
 
 

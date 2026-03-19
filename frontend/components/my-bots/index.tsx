@@ -426,6 +426,10 @@ function BotSummaryCard({
       : "rounded-full border border-emerald-400/20 bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300"
     : "rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200"
   const capital = Number(stats?.balance_usdt ?? 0)
+  const pnlClosed = Number(stats?.profit?.profit_closed_fiat ?? 0)
+  const openProfit = Number(stats?.profit?.profit_all_coin ?? 0) - Number(stats?.profit?.profit_closed_coin ?? 0)
+  const rawProfitPercent = Number(stats?.profit?.profit_closed_percent ?? 0)
+  const profitPercent = Math.abs(rawProfitPercent) <= 1 ? rawProfitPercent * 100 : rawProfitPercent
   const exchangeName = normalizeExchangeName(String(stats?.config?.exchange || bot.name))
   const tradeType = inferTradeTypeLabel(bot.name, stats?.config?.stake_amount)
   const favicon = exchangeFaviconUrl(exchangeName)
@@ -558,6 +562,34 @@ function BotSummaryCard({
           <span className="mx-2">•</span>
           <span>{tradeType}</span>
         </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-border/80 bg-background/40 p-3 sm:grid-cols-4">
+          <div>
+            <p className="text-[11px] text-[#99a1af]">Balance</p>
+            <p className="text-sm font-semibold text-foreground">{fmtUsd(capital)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-[#99a1af]">P&amp;L</p>
+            <p className={cn("text-sm font-semibold", pnlClosed >= 0 ? "text-emerald-400" : "text-red-400")}>
+              {pnlClosed >= 0 ? "+" : ""}
+              {fmtUsd(pnlClosed)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-[#99a1af]">Open Profit</p>
+            <p className={cn("text-sm font-semibold", openProfit >= 0 ? "text-emerald-400" : "text-red-400")}>
+              {openProfit >= 0 ? "+" : ""}
+              {fmtUsd(openProfit)}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-[#99a1af]">Profit %</p>
+            <p className={cn("text-sm font-semibold", profitPercent >= 0 ? "text-emerald-400" : "text-red-400")}>
+              {profitPercent >= 0 ? "+" : ""}
+              {profitPercent.toFixed(2)}%
+            </p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   )
@@ -589,6 +621,54 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     deploy_enabled?: boolean
     deploy_unavailable_reason?: string
     last_error?: string
+    strategy_settings?: {
+      trade_type?: string
+      dca_mode?: string
+      dca_enabled?: boolean
+      stake_amount?: number
+      max_open_order?: number
+      stoploss_pct?: number
+      dca_stoploss_pct?: number
+      entry_5m_enabled?: boolean
+      entry_15m_enabled?: boolean
+      entry_30m_enabled?: boolean
+      entry_1h_enabled?: boolean
+      entry_4h_enabled?: boolean
+      use_chg_filter?: boolean
+      chg_5m_enabled?: boolean
+      chg_15m_enabled?: boolean
+      chg_30m_enabled?: boolean
+      chg_1h_enabled?: boolean
+      chg_4h_enabled?: boolean
+      chg_5m_min?: number
+      chg_5m_max?: number
+      chg_15m_min?: number
+      chg_15m_max?: number
+      chg_30m_min?: number
+      chg_30m_max?: number
+      chg_1h_min?: number
+      chg_1h_max?: number
+      chg_4h_min?: number
+      chg_4h_max?: number
+      dca_chg_5m_min?: number
+      dca_chg_5m_max?: number
+      dca_chg_15m_min?: number
+      dca_chg_15m_max?: number
+      dca_chg_30m_min?: number
+      dca_chg_30m_max?: number
+      dca_chg_1h_min?: number
+      dca_chg_1h_max?: number
+      dca_chg_4h_min?: number
+      dca_chg_4h_max?: number
+      chg_5m_exit_buffer?: number
+      chg_15m_exit_buffer?: number
+      chg_30m_exit_buffer?: number
+      chg_1h_exit_buffer?: number
+      chg_4h_exit_buffer?: number
+      dca_reentry_min_profit?: number
+      dca_reentry_max_drawdown?: number
+      leverage?: number
+    }
     history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
   } | null>(null)
   const [typeFilter, setTypeFilter] = useState(FILTER_ALL)
@@ -611,6 +691,55 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   const [exchangeConnectStage, setExchangeConnectStage] = useState<"validating" | "switching" | null>(null)
   const [switchToDryRunDialogOpen, setSwitchToDryRunDialogOpen] = useState(false)
   const [switchToDryRunLoading, setSwitchToDryRunLoading] = useState(false)
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsForm, setSettingsForm] = useState({
+    tradeType: "compound" as "fixed" | "compound",
+    dcaMode: "Enable" as "Enable" | "Disable",
+    stakeAmount: 50,
+    maxOpenOrder: 15,
+    stoplossPct: 99,
+    dcaStoplossPct: 50,
+    entry5mEnabled: true,
+    entry15mEnabled: false,
+    entry30mEnabled: false,
+    entry1hEnabled: false,
+    entry4hEnabled: false,
+    useChgFilter: true,
+    chg5mEnabled: true,
+    chg15mEnabled: true,
+    chg30mEnabled: true,
+    chg1hEnabled: true,
+    chg4hEnabled: true,
+    chg5mMin: -10,
+    chg5mMax: 10,
+    chg15mMin: -10,
+    chg15mMax: 10,
+    chg30mMin: -10,
+    chg30mMax: 10,
+    chg1hMin: -10,
+    chg1hMax: 10,
+    chg4hMin: -10,
+    chg4hMax: 10,
+    dcaChg5mMin: -5,
+    dcaChg5mMax: 5,
+    dcaChg15mMin: -10,
+    dcaChg15mMax: 10,
+    dcaChg30mMin: -10,
+    dcaChg30mMax: 10,
+    dcaChg1hMin: -10,
+    dcaChg1hMax: 10,
+    dcaChg4hMin: -10,
+    dcaChg4hMax: 10,
+    chg5mExitBuffer: 2,
+    chg15mExitBuffer: 2,
+    chg30mExitBuffer: 2,
+    chg1hExitBuffer: 2,
+    chg4hExitBuffer: 2,
+    dcaReentryMinProfit: -0.05,
+    dcaReentryMaxDrawdown: -0.3,
+    leverage: 5,
+  })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [archivedBots, setArchivedBots] = useState<Record<string, boolean>>({})
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -701,6 +830,54 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
             deploy_enabled?: boolean
             deploy_unavailable_reason?: string
             last_error?: string
+            strategy_settings?: {
+              trade_type?: string
+              dca_mode?: string
+              dca_enabled?: boolean
+              stake_amount?: number
+              max_open_order?: number
+              stoploss_pct?: number
+              dca_stoploss_pct?: number
+              entry_5m_enabled?: boolean
+              entry_15m_enabled?: boolean
+              entry_30m_enabled?: boolean
+              entry_1h_enabled?: boolean
+              entry_4h_enabled?: boolean
+              use_chg_filter?: boolean
+              chg_5m_enabled?: boolean
+              chg_15m_enabled?: boolean
+              chg_30m_enabled?: boolean
+              chg_1h_enabled?: boolean
+              chg_4h_enabled?: boolean
+              chg_5m_min?: number
+              chg_5m_max?: number
+              chg_15m_min?: number
+              chg_15m_max?: number
+              chg_30m_min?: number
+              chg_30m_max?: number
+              chg_1h_min?: number
+              chg_1h_max?: number
+              chg_4h_min?: number
+              chg_4h_max?: number
+              dca_chg_5m_min?: number
+              dca_chg_5m_max?: number
+              dca_chg_15m_min?: number
+              dca_chg_15m_max?: number
+              dca_chg_30m_min?: number
+              dca_chg_30m_max?: number
+              dca_chg_1h_min?: number
+              dca_chg_1h_max?: number
+              dca_chg_4h_min?: number
+              dca_chg_4h_max?: number
+              chg_5m_exit_buffer?: number
+              chg_15m_exit_buffer?: number
+              chg_30m_exit_buffer?: number
+              chg_1h_exit_buffer?: number
+              chg_4h_exit_buffer?: number
+              dca_reentry_min_profit?: number
+              dca_reentry_max_drawdown?: number
+              leverage?: number
+            }
             history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
           }
         }
@@ -808,7 +985,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
 
   const botExchange = normalizeExchangeName((bot as { name?: string } | null)?.name)
   const botAccountType = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase()
-  const isBotLiveMode = botAccountType.includes("real")
+  const isBotLiveMode = stats ? !Boolean(stats.config?.dry_run) : botAccountType.includes("real")
   const botIsDemo = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase().includes("demo")
   const showApiStep = !botIsDemo
   const showCreatedServerIp = botExchange === "Binance" && !botIsDemo
@@ -819,6 +996,74 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     result.push("167.71.232.153")
     return result.join(" ")
   }, [setupState?.server_ip])
+
+  useEffect(() => {
+    const runtime = setupState?.strategy_settings
+    const config = stats?.config
+
+    const tradeTypeRaw = String(runtime?.trade_type || "").toLowerCase()
+    const tradeType = tradeTypeRaw.includes("fixed") ? "fixed" : "compound"
+
+    const dcaMode = String(runtime?.dca_mode || "Enable").toLowerCase().includes("disable") ? "Disable" : "Enable"
+
+    const configStake = typeof config?.stake_amount === "number"
+      ? config.stake_amount
+      : Number(config?.stake_amount)
+    const fallbackStake = Number.isFinite(configStake) && configStake > 0 ? configStake : 50
+
+    const stoplossPctRaw = Number(runtime?.stoploss_pct)
+    const dcaStoplossPctRaw = Number(runtime?.dca_stoploss_pct)
+    const maxOpenRaw = Number(runtime?.max_open_order ?? config?.max_open_trades ?? 15)
+    const leverageRaw = Number(runtime?.leverage ?? 5)
+
+    setSettingsForm({
+      tradeType,
+      dcaMode,
+      stakeAmount: Number(runtime?.stake_amount ?? fallbackStake),
+      maxOpenOrder: Number.isFinite(maxOpenRaw) ? Math.max(1, Math.min(100, Math.trunc(maxOpenRaw))) : 15,
+      stoplossPct: Number.isFinite(stoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(stoplossPctRaw))) : 99,
+      dcaStoplossPct: Number.isFinite(dcaStoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(dcaStoplossPctRaw))) : 50,
+      entry5mEnabled: runtime?.entry_5m_enabled ?? true,
+      entry15mEnabled: runtime?.entry_15m_enabled ?? false,
+      entry30mEnabled: runtime?.entry_30m_enabled ?? false,
+      entry1hEnabled: runtime?.entry_1h_enabled ?? false,
+      entry4hEnabled: runtime?.entry_4h_enabled ?? false,
+      useChgFilter: runtime?.use_chg_filter ?? true,
+      chg5mEnabled: runtime?.chg_5m_enabled ?? true,
+      chg15mEnabled: runtime?.chg_15m_enabled ?? true,
+      chg30mEnabled: runtime?.chg_30m_enabled ?? true,
+      chg1hEnabled: runtime?.chg_1h_enabled ?? true,
+      chg4hEnabled: runtime?.chg_4h_enabled ?? true,
+      chg5mMin: Number(runtime?.chg_5m_min ?? -10),
+      chg5mMax: Number(runtime?.chg_5m_max ?? 10),
+      chg15mMin: Number(runtime?.chg_15m_min ?? -10),
+      chg15mMax: Number(runtime?.chg_15m_max ?? 10),
+      chg30mMin: Number(runtime?.chg_30m_min ?? -10),
+      chg30mMax: Number(runtime?.chg_30m_max ?? 10),
+      chg1hMin: Number(runtime?.chg_1h_min ?? -10),
+      chg1hMax: Number(runtime?.chg_1h_max ?? 10),
+      chg4hMin: Number(runtime?.chg_4h_min ?? -10),
+      chg4hMax: Number(runtime?.chg_4h_max ?? 10),
+      dcaChg5mMin: Number(runtime?.dca_chg_5m_min ?? -5),
+      dcaChg5mMax: Number(runtime?.dca_chg_5m_max ?? 5),
+      dcaChg15mMin: Number(runtime?.dca_chg_15m_min ?? -10),
+      dcaChg15mMax: Number(runtime?.dca_chg_15m_max ?? 10),
+      dcaChg30mMin: Number(runtime?.dca_chg_30m_min ?? -10),
+      dcaChg30mMax: Number(runtime?.dca_chg_30m_max ?? 10),
+      dcaChg1hMin: Number(runtime?.dca_chg_1h_min ?? -10),
+      dcaChg1hMax: Number(runtime?.dca_chg_1h_max ?? 10),
+      dcaChg4hMin: Number(runtime?.dca_chg_4h_min ?? -10),
+      dcaChg4hMax: Number(runtime?.dca_chg_4h_max ?? 10),
+      chg5mExitBuffer: Number(runtime?.chg_5m_exit_buffer ?? 2),
+      chg15mExitBuffer: Number(runtime?.chg_15m_exit_buffer ?? 2),
+      chg30mExitBuffer: Number(runtime?.chg_30m_exit_buffer ?? 2),
+      chg1hExitBuffer: Number(runtime?.chg_1h_exit_buffer ?? 2),
+      chg4hExitBuffer: Number(runtime?.chg_4h_exit_buffer ?? 2),
+      dcaReentryMinProfit: Number(runtime?.dca_reentry_min_profit ?? -0.05),
+      dcaReentryMaxDrawdown: Number(runtime?.dca_reentry_max_drawdown ?? -0.3),
+      leverage: Number.isFinite(leverageRaw) ? Math.max(1, Math.min(125, leverageRaw)) : 5,
+    })
+  }, [setupState?.strategy_settings, stats?.config])
 
   const unrealizedPnl = useMemo(() => {
     return openTrades.reduce((sum, t) => sum + (t.profit_abs ?? 0), 0)
@@ -1599,6 +1844,149 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     }
   }
 
+  const handleSaveBotSettings = async () => {
+    if (!setupBotId || settingsSaving) return
+
+    if (!setupState?.server_ip) {
+      setSetupError("Server is not ready yet. Complete setup first, then apply bot settings.")
+      return
+    }
+
+    if (settingsForm.tradeType === "fixed" && (!Number.isFinite(settingsForm.stakeAmount) || settingsForm.stakeAmount <= 0)) {
+      setSetupError("Stake amount must be greater than 0 for Fixed trade type")
+      return
+    }
+
+    setSettingsSaving(true)
+    setSetupError(null)
+    setSetupMessage(null)
+
+    try {
+      const payload = {
+        tradeType: settingsForm.tradeType,
+        dcaMode: settingsForm.dcaMode,
+        stakeAmount: settingsForm.tradeType === "fixed" ? settingsForm.stakeAmount : null,
+        maxOpenOrder: settingsForm.maxOpenOrder,
+        stoplossPct: settingsForm.stoplossPct,
+        dcaStoplossPct: settingsForm.dcaStoplossPct,
+        entry5mEnabled: settingsForm.entry5mEnabled,
+        entry15mEnabled: settingsForm.entry15mEnabled,
+        entry30mEnabled: settingsForm.entry30mEnabled,
+        entry1hEnabled: settingsForm.entry1hEnabled,
+        entry4hEnabled: settingsForm.entry4hEnabled,
+        useChgFilter: settingsForm.useChgFilter,
+        chg5mEnabled: settingsForm.chg5mEnabled,
+        chg15mEnabled: settingsForm.chg15mEnabled,
+        chg30mEnabled: settingsForm.chg30mEnabled,
+        chg1hEnabled: settingsForm.chg1hEnabled,
+        chg4hEnabled: settingsForm.chg4hEnabled,
+        chg5mMin: settingsForm.chg5mMin,
+        chg5mMax: settingsForm.chg5mMax,
+        chg15mMin: settingsForm.chg15mMin,
+        chg15mMax: settingsForm.chg15mMax,
+        chg30mMin: settingsForm.chg30mMin,
+        chg30mMax: settingsForm.chg30mMax,
+        chg1hMin: settingsForm.chg1hMin,
+        chg1hMax: settingsForm.chg1hMax,
+        chg4hMin: settingsForm.chg4hMin,
+        chg4hMax: settingsForm.chg4hMax,
+        dcaChg5mMin: settingsForm.dcaChg5mMin,
+        dcaChg5mMax: settingsForm.dcaChg5mMax,
+        dcaChg15mMin: settingsForm.dcaChg15mMin,
+        dcaChg15mMax: settingsForm.dcaChg15mMax,
+        dcaChg30mMin: settingsForm.dcaChg30mMin,
+        dcaChg30mMax: settingsForm.dcaChg30mMax,
+        dcaChg1hMin: settingsForm.dcaChg1hMin,
+        dcaChg1hMax: settingsForm.dcaChg1hMax,
+        dcaChg4hMin: settingsForm.dcaChg4hMin,
+        dcaChg4hMax: settingsForm.dcaChg4hMax,
+        chg5mExitBuffer: settingsForm.chg5mExitBuffer,
+        chg15mExitBuffer: settingsForm.chg15mExitBuffer,
+        chg30mExitBuffer: settingsForm.chg30mExitBuffer,
+        chg1hExitBuffer: settingsForm.chg1hExitBuffer,
+        chg4hExitBuffer: settingsForm.chg4hExitBuffer,
+        dcaReentryMinProfit: settingsForm.dcaReentryMinProfit,
+        dcaReentryMaxDrawdown: settingsForm.dcaReentryMaxDrawdown,
+        leverage: settingsForm.leverage,
+      }
+      console.log("[Bot Settings] Sending payload:", payload)
+
+      const saveRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const savePayload = (await saveRes.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          last_error?: string
+        }
+      }
+
+      console.log("[Bot Settings] Save response:", { status: saveRes.status, payload: savePayload })
+
+      if (!saveRes.ok) {
+        const errorMsg =
+          savePayload.error ||
+          savePayload.detail ||
+          savePayload.message ||
+          (saveRes.status === 504
+            ? "Gateway timeout while saving bot settings. Please retry in a few seconds."
+            : `Failed to save bot settings (HTTP ${saveRes.status})`)
+        console.error("[Bot Settings] Save failed:", errorMsg)
+        throw new Error(errorMsg)
+      }
+
+      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          strategyName: "ProfitPath",
+          dryRun: !isBotLiveMode,
+        }),
+      })
+
+      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
+        error?: string
+        detail?: string
+        message?: string
+        setup?: {
+          last_error?: string
+        }
+      }
+
+      console.log("[Bot Settings] Deploy response:", { status: deployRes.status, payload: deployPayload })
+
+      if (!deployRes.ok) {
+        const errorMsg =
+          deployPayload.error ||
+          deployPayload.detail ||
+          deployPayload.message ||
+          (deployRes.status === 504
+            ? "Gateway timeout while applying bot settings. Please retry in a few seconds."
+            : `Failed to apply bot settings (HTTP ${deployRes.status})`)
+        console.error("[Bot Settings] Deploy failed:", errorMsg)
+        throw new Error(errorMsg)
+      }
+
+      setSetupMessage("Bot settings saved, config/strategy updated, and bot restarted.")
+      setSetupError(deployPayload.setup?.last_error || null)
+      setSettingsPanelOpen(false)
+      refetchStats()
+      refetchOpen()
+      window.location.reload()
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to apply bot settings"
+      console.error("[Bot Settings] Handler error:", errorMsg, err)
+      setSetupError(errorMsg)
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
   return (
     <div data-name="my-bots-page" className="min-h-[calc(100vh-96px)] border border-border bg-background text-foreground rounded-lg">
       <div data-name="my-bots-layout" className={cn("relative grid min-h-[calc(100vh-96px)] grid-cols-1", publicView ? "xl:grid-cols-1" : isPanelCollapsed ? "xl:grid-cols-[72px_minmax(0,1fr)]" : "xl:grid-cols-[420px_minmax(0,1fr)]")}>
@@ -1864,6 +2252,9 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                     }}
                   >
                     <Wallet className="h-3 w-3" /> {isBotLiveMode ? "Switch" : "Exchange"}
+                  </Button>
+                  <Button variant="outline" className="h-7 rounded-lg border-border px-3 text-xs" onClick={() => setSettingsPanelOpen(true)}>
+                    <SlidersHorizontal className="h-3 w-3" /> Settings
                   </Button>
                   <Button variant="outline" className="h-7 rounded-lg border-border px-3 text-xs" onClick={() => setShareDialogOpen(true)}>
                     <Share2 className="h-3 w-3" /> Share
@@ -2708,6 +3099,282 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                 </div>
               )}
 
+              {!publicView && settingsPanelOpen && (
+                <div data-name="settings-sidepanel-overlay" className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
+                  <div data-name="settings-sidepanel" className="absolute inset-y-0 right-0 w-full max-w-[560px] overflow-y-auto border-l border-border/70 bg-gradient-to-b from-background via-card to-background p-6 text-foreground shadow-2xl">
+                    <div className="flex items-center justify-between">
+                      <button type="button" onClick={() => setSettingsPanelOpen(false)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                        <ChevronLeft className="h-4 w-4" />
+                        Back
+                      </button>
+                      <button type="button" onClick={() => setSettingsPanelOpen(false)} className="text-muted-foreground hover:text-foreground" aria-label="Close settings panel">
+                        <XCircle className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <h3 className="mt-6 text-[34px] font-semibold leading-none tracking-tight text-foreground">
+                      Bot <span className="text-primary">Settings</span>
+                    </h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Configure strategy settings. Save applies config/strategy and restarts the bot.
+                    </p>
+
+                    <div className="mt-6 grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs text-muted-foreground">Trade Type</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(["fixed", "compound"] as const).map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setSettingsForm((prev) => ({ ...prev, tradeType: opt }))}
+                              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                settingsForm.tradeType === opt
+                                  ? "border-primary bg-primary/10"
+                                  : "border-border/70 bg-background/60 hover:border-primary/40"
+                              }`}
+                            >
+                              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${settingsForm.tradeType === opt ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                                {settingsForm.tradeType === opt && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                              </span>
+                              <span className="text-sm font-medium capitalize text-foreground">{opt.charAt(0).toUpperCase() + opt.slice(1)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs text-muted-foreground">DCA Mode</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(["Enable", "Disable"] as const).map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => setSettingsForm((prev) => ({ ...prev, dcaMode: opt }))}
+                              className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                settingsForm.dcaMode === opt
+                                  ? "border-primary bg-primary/10"
+                                  : "border-border/70 bg-background/60 hover:border-primary/40"
+                              }`}
+                            >
+                              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${settingsForm.dcaMode === opt ? "border-primary bg-primary" : "border-muted-foreground"}`}>
+                                {settingsForm.dcaMode === opt && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                              </span>
+                              <span className="text-sm font-medium text-foreground">{opt}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {settingsForm.tradeType === "fixed" && (
+                        <div className="space-y-2">
+                          <label className="text-xs text-muted-foreground">Stake Amount</label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            value={settingsForm.stakeAmount}
+                            onChange={(event) => setSettingsForm((prev) => ({ ...prev, stakeAmount: Number(event.target.value || 0) }))}
+                          />
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">Max Open Order</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          step="1"
+                          value={settingsForm.maxOpenOrder}
+                          onChange={(event) => setSettingsForm((prev) => ({ ...prev, maxOpenOrder: Math.max(1, Math.min(100, Math.trunc(Number(event.target.value || 1)))) }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">Stoploss % (1 to 100)</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          step="1"
+                          value={settingsForm.stoplossPct}
+                          onChange={(event) => setSettingsForm((prev) => ({ ...prev, stoplossPct: Math.max(1, Math.min(100, Number(event.target.value || 99))) }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs text-muted-foreground">DCA Stoploss % (1 to 100)</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          step="1"
+                          value={settingsForm.dcaStoplossPct}
+                          onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaStoplossPct: Math.max(1, Math.min(100, Number(event.target.value || 50))) }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs text-muted-foreground">Leverage</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={125}
+                          step="0.1"
+                          value={settingsForm.leverage}
+                          onChange={(event) => setSettingsForm((prev) => ({ ...prev, leverage: Math.max(1, Math.min(125, Number(event.target.value || 1))) }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <p className="mb-3 text-xs font-medium text-foreground">Entry Timeframes</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
+                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
+                          <span>5m</span>
+                          <Switch
+                            checked={settingsForm.entry5mEnabled}
+                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry5mEnabled: checked }))}
+                          />
+                        </label>
+                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
+                          <span>15m</span>
+                          <Switch
+                            checked={settingsForm.entry15mEnabled}
+                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry15mEnabled: checked }))}
+                          />
+                        </label>
+                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
+                          <span>30m</span>
+                          <Switch
+                            checked={settingsForm.entry30mEnabled}
+                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry30mEnabled: checked }))}
+                          />
+                        </label>
+                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
+                          <span>1h</span>
+                          <Switch
+                            checked={settingsForm.entry1hEnabled}
+                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry1hEnabled: checked }))}
+                          />
+                        </label>
+                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
+                          <span>4h</span>
+                          <Switch
+                            checked={settingsForm.entry4hEnabled}
+                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry4hEnabled: checked }))}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-medium text-foreground">24h Change Filter</p>
+                        <Switch
+                          checked={settingsForm.useChgFilter}
+                          onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, useChgFilter: checked }))}
+                        />
+                      </div>
+
+                      {settingsForm.entry5mEnabled && (
+                        <div className="mb-4 rounded-lg border border-border p-3">
+                          <p className="mb-2 text-xs font-semibold text-foreground">5m</p>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg5mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg5mEnabled: checked }))} /></label>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg5mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg5mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg5mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg5mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg5mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg5mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg5mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mExitBuffer: Number(event.target.value || 0) }))} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {settingsForm.entry15mEnabled && (
+                        <div className="mb-4 rounded-lg border border-border p-3">
+                          <p className="mb-2 text-xs font-semibold text-foreground">15m</p>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg15mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg15mEnabled: checked }))} /></label>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg15mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg15mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg15mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg15mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg15mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg15mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg15mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mExitBuffer: Number(event.target.value || 0) }))} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {settingsForm.entry30mEnabled && (
+                        <div className="mb-4 rounded-lg border border-border p-3">
+                          <p className="mb-2 text-xs font-semibold text-foreground">30m</p>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg30mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg30mEnabled: checked }))} /></label>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg30mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mExitBuffer: Number(event.target.value || 0) }))} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {settingsForm.entry1hEnabled && (
+                        <div className="mb-4 rounded-lg border border-border p-3">
+                          <p className="mb-2 text-xs font-semibold text-foreground">1h</p>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg1hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg1hEnabled: checked }))} /></label>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg1hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hExitBuffer: Number(event.target.value || 0) }))} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {settingsForm.entry4hEnabled && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="mb-2 text-xs font-semibold text-foreground">4h</p>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg4hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg4hEnabled: checked }))} /></label>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg4hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hExitBuffer: Number(event.target.value || 0) }))} /></div>
+                          </div>
+                        </div>
+                      )}
+
+                      {!settingsForm.entry5mEnabled && !settingsForm.entry15mEnabled && !settingsForm.entry30mEnabled && !settingsForm.entry1hEnabled && !settingsForm.entry4hEnabled && (
+                        <p className="text-xs text-muted-foreground">Enable at least one Entry Timeframe to configure change-filter values.</p>
+                      )}
+
+                      <p className="mt-4 mb-2 text-[11px] text-muted-foreground">DCA re-entry window</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Min Profit</label>
+                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMinProfit} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMinProfit: Number(event.target.value || 0) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Max Drawdown</label>
+                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMaxDrawdown} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMaxDrawdown: Number(event.target.value || 0) }))} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex gap-2">
+                      <Button variant="outline" className="h-10 flex-1" onClick={() => setSettingsPanelOpen(false)} disabled={settingsSaving}>
+                        Cancel
+                      </Button>
+                      <Button className="h-10 flex-1 shadow-lg shadow-primary/20" onClick={handleSaveBotSettings} disabled={settingsSaving}>
+                        {settingsSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlidersHorizontal className="h-4 w-4" />}
+                        {settingsSaving ? "Applying..." : "Save & Apply"}
+                      </Button>
+                    </div>
+
+                    {!!setupError && (
+                      <p className="mt-3 text-xs text-red-400">{setupError}</p>
+                    )}
+                    {!!setupMessage && !setupError && (
+                      <p className="mt-3 text-xs text-emerald-400">{setupMessage}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {!publicView && <Dialog
                 open={shareDialogOpen}
                 onOpenChange={(open) => {
@@ -2828,6 +3495,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                   </div>
                 </DialogContent>
               </Dialog>}
+
+
 
               <Dialog
                 open={!!activeTrade}

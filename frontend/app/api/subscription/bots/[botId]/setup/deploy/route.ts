@@ -56,37 +56,53 @@ export async function POST(request: Request, { params }: Params) {
     const apiKey = String(body.apiKey ?? "").trim();
     const apiSecret = String(body.apiSecret ?? "").trim();
 
-    const response = await fetchBackend(`/subscriptions/${encodeURIComponent(botId)}/setup/deploy`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        session_token: sessionToken,
-        strategy_name: String(body.strategyName ?? "SampleStrategy"),
-        strategy_code: typeof body.strategyCode === "string" ? body.strategyCode : null,
-        config_override: body.configOverride ?? null,
-        dry_run: dryRun,
-        api_key: apiKey || null,
-        api_secret: apiSecret || null,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 300 seconds
 
-    const raw = await response.text();
-    let payload: Record<string, unknown>;
     try {
-      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      payload = { error: raw || "Backend returned a non-JSON response" };
-    }
+      const response = await fetchBackend(`/subscriptions/${encodeURIComponent(botId)}/setup/deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          session_token: sessionToken,
+          strategy_name: String(body.strategyName ?? "SampleStrategy"),
+          strategy_code: typeof body.strategyCode === "string" ? body.strategyCode : null,
+          config_override: body.configOverride ?? null,
+          dry_run: dryRun,
+          api_key: apiKey || null,
+          api_secret: apiSecret || null,
+        }),
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      const detail = String(payload.detail ?? payload.error ?? payload.message ?? "Bot deployment failed");
-      return NextResponse.json({ error: detail, detail }, { status: response.status });
-    }
+      clearTimeout(timeoutId);
 
-    return NextResponse.json(payload, { status: response.status });
+
+      const raw = await response.text();
+      let payload: Record<string, unknown>;
+      try {
+        payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      } catch {
+        payload = { error: raw || "Backend returned a non-JSON response" };
+      }
+
+      if (!response.ok) {
+        const detail = String(payload.detail ?? payload.error ?? payload.message ?? "Bot deployment failed");
+        return NextResponse.json({ error: detail, detail }, { status: response.status });
+      }
+
+      return NextResponse.json(payload, { status: response.status });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const message = err instanceof Error ? err.message : "Failed to deploy bot";
+      if (message.includes("abort")) {
+        return NextResponse.json({ error: "Request timeout (300s)" }, { status: 504 });
+      }
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to deploy bot";
+    const message = err instanceof Error ? err.message : "Request failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

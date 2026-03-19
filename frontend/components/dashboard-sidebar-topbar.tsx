@@ -12,7 +12,7 @@ const DashboardSidebarTopbar = ({ children }: { children: React.ReactNode }) => 
 
       <div data-name="dashboard-main-area" className="duration-300 translate-x-[72px] max-w-[calc(100%-72px)]">
         <AnnouncementBanner />
-        <main data-name="dashboard-content" className="p-4 md:p-6">{children}</main>
+        <main data-name="dashboard-content">{children}</main>
       </div>
     </div>
   );

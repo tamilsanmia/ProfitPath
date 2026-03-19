@@ -900,6 +900,9 @@ def delete_user_purchased_bot_account(user_id: int, bot_id: str) -> bool:
 def update_bot_setup_state(user_id: int, bot_id: str, setup_patch: dict[str, Any]) -> dict[str, Any] | None:
     with get_pg_connection() as conn:
         with conn.cursor() as cur:
+            # Fail fast on lock contention so API returns quickly instead of hitting gateway timeouts.
+            cur.execute("SET LOCAL lock_timeout = '5s'")
+            cur.execute("SET LOCAL statement_timeout = '20s'")
             cur.execute(
                 """
                 UPDATE bot_accounts
@@ -1044,7 +1047,7 @@ def create_purchased_bot_account(
                     max_open_order = int(raw_max_open_order)
                 except (TypeError, ValueError):
                     max_open_order = 15
-            max_open_order = max(5, min(15, max_open_order))
+            max_open_order = max(1, min(100, max_open_order))
 
             bot_name = f"{model} {exchange} Bot"
             exchange_normalized = str(exchange or "").strip().lower()
