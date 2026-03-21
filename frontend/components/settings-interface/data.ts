@@ -8,6 +8,7 @@ import type {
   BotSettings,
   PrivacySettings,
   DataSettings,
+  AdminSiteSettings,
   Connection,
   Session,
   LoginHistory,
@@ -76,6 +77,7 @@ export const defaultAppearanceSettings: AppearanceSettings = {
   theme: "system",
   density: "comfortable",
   language: "en",
+  currency: "USD",
   dateFormat: "MM/DD/YYYY",
   timeFormat: "12h",
   timezone: "America/New_York",
@@ -181,6 +183,21 @@ export const defaultDataSettings: DataSettings = {
   },
 }
 
+export const defaultAdminSiteSettings: AdminSiteSettings = {
+  siteName: "DefibotX",
+  tagline: "AI Trading",
+  logoUrl: "",
+  faviconUrl: "",
+  footerText: "Trade smarter with DefibotX.",
+  registrationsOpen: true,
+  subscriptionsOpen: true,
+  readOnlyApi: false,
+  announcementEnabled: false,
+  announcementMessage: "",
+  supportEmail: "support@defibotx.com",
+  maxBotsPerUser: 5,
+}
+
 export const mockConnections: Connection[] = [
   {
     id: "1",
@@ -266,9 +283,11 @@ export const defaultSettingsState: SettingsState = {
   bots: defaultBotSettings,
   privacy: defaultPrivacySettings,
   data: defaultDataSettings,
+  adminSite: defaultAdminSiteSettings,
   connections: mockConnections,
   sessions: mockSessions,
   loginHistory: mockLoginHistory,
+  isAdmin: false,
   activeTab: "profile",
   isLoading: false,
   hasUnsavedChanges: false,

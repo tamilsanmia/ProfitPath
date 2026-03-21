@@ -64,6 +64,7 @@ export interface AppearanceSettings {
   theme: "light" | "dark" | "system"
   density: "compact" | "comfortable" | "spacious"
   language: string
+  currency: string
   dateFormat: string
   timeFormat: "12h" | "24h"
   timezone: string
@@ -169,6 +170,21 @@ export interface DataSettings {
   }
 }
 
+export interface AdminSiteSettings {
+  siteName: string
+  tagline: string
+  logoUrl: string
+  faviconUrl: string
+  footerText: string
+  registrationsOpen: boolean
+  subscriptionsOpen: boolean
+  readOnlyApi: boolean
+  announcementEnabled: boolean
+  announcementMessage: string
+  supportEmail: string
+  maxBotsPerUser: number
+}
+
 export interface Connection {
   id: string
   name: string
@@ -219,9 +235,11 @@ export interface SettingsState {
   bots: BotSettings
   privacy: PrivacySettings
   data: DataSettings
+  adminSite: AdminSiteSettings
   connections: Connection[]
   sessions: Session[]
   loginHistory: LoginHistory[]
+  isAdmin: boolean
   activeTab: string
   isLoading: boolean
   hasUnsavedChanges: boolean

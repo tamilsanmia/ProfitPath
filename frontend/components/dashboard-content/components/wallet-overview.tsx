@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyTextFromUsd } from "@/lib/currency-runtime"
 import { ArrowUpRight, Wallet } from "lucide-react"
 import type { WalletAsset } from "../types"
 
@@ -25,7 +26,7 @@ export function WalletOverview({ assets }: WalletOverviewProps) {
               <div className="flex-1">
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{asset.name}</div>
-                  <div className="font-medium">{asset.value}</div>
+                  <div className="font-medium">{formatCurrencyTextFromUsd(asset.value)}</div>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div>{asset.amount}</div>

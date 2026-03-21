@@ -12,17 +12,21 @@ import type {
   BotSettings,
   PrivacySettings,
   DataSettings,
+  AdminSiteSettings,
 } from "../types"
 import { defaultSettingsState } from "../data"
 import { hasUnsavedChanges, deepClone } from "../utils"
 import { emitAvatarUpdated } from "@/lib/local-avatar"
+import { setPreferredCurrency } from "@/lib/currency-runtime"
 
 type SessionUser = {
   first_name?: string
   last_name?: string
+  username?: string
   email?: string
   phone?: string | null
   country?: string | null
+  is_admin?: boolean
 }
 
 function normalizeAvatarValue(value: unknown): string {
@@ -112,6 +116,8 @@ function applyAppearanceToDocument(appearance: AppearanceSettings): void {
   root.setAttribute("data-time-format", appearance.timeFormat)
   root.setAttribute("data-date-format", appearance.dateFormat)
   root.setAttribute("data-timezone", appearance.timezone)
+  root.setAttribute("data-currency", appearance.currency || "USD")
+  setPreferredCurrency(appearance.currency || "USD")
 
   const accessibility = appearance.accessibility
   body.toggleAttribute("data-high-contrast", accessibility.highContrast)
@@ -149,6 +155,10 @@ function mergeSettings(base: Omit<SettingsState, "hasUnsavedChanges">, incoming:
     appearance: {
       ...base.appearance,
       ...(candidate.appearance ?? {}),
+      currency:
+        typeof candidate.appearance?.currency === "string" && candidate.appearance.currency.trim()
+          ? candidate.appearance.currency.trim().toUpperCase()
+          : base.appearance.currency,
       accessibility: {
         ...base.appearance.accessibility,
         ...(candidate.appearance?.accessibility ?? {}),
@@ -204,12 +214,22 @@ function mergeSettings(base: Omit<SettingsState, "hasUnsavedChanges">, incoming:
       retention: { ...base.data.retention, ...(candidate.data?.retention ?? {}) },
       export: { ...base.data.export, ...(candidate.data?.export ?? {}) },
     },
+    adminSite: {
+      ...base.adminSite,
+      ...(candidate.adminSite ?? {}),
+    },
     connections: Array.isArray(candidate.connections) ? candidate.connections : base.connections,
     sessions: Array.isArray(candidate.sessions) ? candidate.sessions : base.sessions,
     loginHistory: Array.isArray(candidate.loginHistory) ? candidate.loginHistory : base.loginHistory,
+    isAdmin: candidate.isAdmin ?? base.isAdmin,
     activeTab: candidate.activeTab ?? base.activeTab,
     isLoading: false,
   }
+}
+
+function sanitizeSettingsForPersistence(settings: Omit<SettingsState, "hasUnsavedChanges">) {
+  const { isAdmin: _isAdmin, ...persistable } = settings
+  return persistable
 }
 
 export const useSettings = () => {
@@ -274,6 +294,7 @@ export const useSettings = () => {
             ...baseWithoutFlag.appearance,
             timezone: detectBrowserTimezone(),
           },
+          isAdmin: Boolean(user?.is_admin),
         }
 
         const merged = mergeSettings(hydratedBase, settingsPayload?.settings)
@@ -400,6 +421,16 @@ export const useSettings = () => {
     }))
   }, [])
 
+  const updateAdminSite = useCallback((updates: Partial<AdminSiteSettings>) => {
+    setSettings((prev) => ({
+      ...prev,
+      adminSite: {
+        ...prev.adminSite,
+        ...updates,
+      },
+    }))
+  }, [])
+
   const updateConnections = useCallback((connections: Connection[]) => {
     setSettings((prev) => ({
       ...prev,
@@ -423,7 +454,7 @@ export const useSettings = () => {
       const response = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: nextSettings }),
+        body: JSON.stringify({ settings: sanitizeSettingsForPersistence(nextSettings) }),
       })
 
       const payload = await response.json()
@@ -471,7 +502,7 @@ export const useSettings = () => {
       const response = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: settingsToPersist }),
+        body: JSON.stringify({ settings: sanitizeSettingsForPersistence(settingsToPersist) }),
       })
 
       const payload = await response.json()
@@ -527,6 +558,7 @@ export const useSettings = () => {
     updateBots,
     updatePrivacy,
     updateData,
+    updateAdminSite,
     updateConnections,
     persistConnections,
     updateSessions,
@@ -535,5 +567,6 @@ export const useSettings = () => {
     saveSettings,
     resetSettings,
     resetToDefaults,
+    isAdmin: settings.isAdmin,
   }
 }

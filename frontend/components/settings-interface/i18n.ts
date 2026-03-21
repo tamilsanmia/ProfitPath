@@ -21,6 +21,8 @@ const EN: Dictionary = {
   "tab.appearance.description": "Theme, layout, language, and accessibility settings",
   "tab.connections.label": "Connections",
   "tab.connections.description": "Manage futures exchange API connections",
+  "tab.admin.label": "Admin",
+  "tab.admin.description": "Admin-only controls for platform site management",
   "appearance.title": "Appearance Settings",
   "appearance.subtitle": "Customize the look and feel of your interface",
   "appearance.themeDisplay": "Theme & Display",

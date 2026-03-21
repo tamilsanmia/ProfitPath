@@ -1,10 +1,8 @@
 import type { Plan, BillingCycle } from "./types"
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime"
 
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount)
+  return formatCurrencyFromUsd(amount)
 }
 
 export const formatDate = (dateString: string): string => {

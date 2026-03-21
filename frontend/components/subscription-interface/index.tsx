@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime";
+import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
 
 const EXCHANGES = ["binance", "bybit"] as const;
 const TRADE_TYPES = ["Fixed", "Compound"] as const;
@@ -13,9 +15,7 @@ const MONTHLY_SERVER_FEE = 10;
 // ─── Helper ─────────────────────────────────────────────────────────────────
 function usd(n: number, noSign = false) {
   const abs = Math.abs(n);
-  const fmt = new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "USD", minimumFractionDigits: 2,
-  }).format(abs);
+  const fmt = formatCurrencyFromUsd(abs);
   if (noSign) return fmt;
   if (n < 0) return `-${fmt}`;
   if (n > 0) return `+${fmt}`;
@@ -84,6 +84,8 @@ function Radio({
 
 // ─── Main component ──────────────────────────────────────────────────────────
 export function SubscriptionInterface() {
+  useCurrencyRealtime();
+
   const router = useRouter();
   const [exchange, setExchange] = useState<(typeof EXCHANGES)[number]>("binance");
   const [tradeType, setTradeType] = useState<(typeof TRADE_TYPES)[number]>("Fixed");

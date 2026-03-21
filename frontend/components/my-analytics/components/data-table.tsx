@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { TableCell, TableRow } from "@/components/ui/table"
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime"
 import type { ColumnVisibility, SignalBot, SignalProvider, Trader } from "../types"
 
 interface DataTableProps {
@@ -73,12 +74,7 @@ export function DataTable({ data, visibleColumns, type, onEdit, onFollow, onSubs
           {visibleColumns.profit && (
             <TableCell className={`text-right ${item.profit > 0 ? "text-green-500" : "text-red-500"}`}>
               {item.profit > 0 ? "+" : ""}
-              {item.profit
-                ? item.profit.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })
-                : 0}
+              {formatCurrencyFromUsd(item.profit || 0)}
             </TableCell>
           )}
 
@@ -94,7 +90,7 @@ export function DataTable({ data, visibleColumns, type, onEdit, onFollow, onSubs
           )}
 
           {visibleColumns.volume && "volume" in item && (
-            <TableCell className="text-right">${item.volume ? item.volume.toLocaleString() : 0}</TableCell>
+            <TableCell className="text-right">{formatCurrencyFromUsd(item.volume || 0)}</TableCell>
           )}
 
           {visibleColumns.timeframe && <TableCell>{item.timeframe}</TableCell>}

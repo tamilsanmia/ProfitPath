@@ -50,6 +50,7 @@ docker compose -f docker-compose.prod.yml up --build -d
   - Default: `http://localhost:8000`
 - `NEXT_PUBLIC_APP_URL`: Public app URL used by middleware for canonical redirects.
 - `NEXT_PUBLIC_GOOGLE_CLIENT_ID`: Google sign-in client ID for auth UI.
+- `ADMIN_USERNAME`: Username (or email local-part) treated as admin for admin menu and site management settings.
 
 ## Important Routes
 

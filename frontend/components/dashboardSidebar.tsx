@@ -17,11 +17,13 @@ import {
   LineChart,
   LogOut,
   Settings,
+  Shield,
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 
 type MenuItem = {
   id: string;
@@ -40,6 +42,7 @@ type Props = {
 };
 
 export function DashboardSidebar({ collapsed }: Props) {
+  const { theme } = useTheme();
   const resolveAvatarSrc = (value: string | null | undefined): string | undefined => {
     if (!value) {
       return undefined;
@@ -80,10 +83,21 @@ export function DashboardSidebar({ collapsed }: Props) {
   const [sessionUser, setSessionUser] = useState<{
     first_name: string;
     last_name: string;
+    username?: string;
     email?: string;
     avatar?: string;
+    is_admin?: boolean;
   } | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
+  const [siteBranding, setSiteBranding] = useState({
+    siteTitle: "DefibotX",
+    tagline: "AI Trading",
+    companyLogoLightUrl: "",
+    companyLogoDarkUrl: "",
+    faviconUrl: "",
+    companyMainDomain: "",
+    footerText: "",
+  });
 
   // Set active item based on pathname
   useEffect(() => {
@@ -95,6 +109,8 @@ export function DashboardSidebar({ collapsed }: Props) {
       setActiveItem("invite-friends");
     } else if (pathname.startsWith("/subscription")) {
       setActiveItem("subscription");
+    } else if (pathname.startsWith("/admin")) {
+      setActiveItem("admin");
     } else if (pathname.startsWith("/settings")) {
       setActiveItem("settings");
     } else if (pathname.startsWith("/profile") || pathname.startsWith("/settings?tab=profile")) {
@@ -163,17 +179,89 @@ export function DashboardSidebar({ collapsed }: Props) {
     };
   }, [sessionUser?.email]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSiteBranding() {
+      try {
+        const response = await fetch("/api/settings", { cache: "no-store" });
+        const payload = await response.json();
+        if (!isMounted || !response.ok) {
+          return;
+        }
+
+        const adminSite = payload?.settings?.adminSite;
+        if (!adminSite || typeof adminSite !== "object") {
+          return;
+        }
+
+        setSiteBranding((prev) => ({
+          siteTitle: typeof adminSite.siteTitle === "string" && adminSite.siteTitle.trim()
+            ? adminSite.siteTitle.trim()
+            : typeof adminSite.siteName === "string" && adminSite.siteName.trim()
+              ? adminSite.siteName.trim()
+              : prev.siteTitle,
+          tagline: typeof adminSite.tagline === "string" ? adminSite.tagline.trim() : prev.tagline,
+          companyLogoLightUrl: typeof adminSite.companyLogoLightUrl === "string" && adminSite.companyLogoLightUrl.trim()
+            ? adminSite.companyLogoLightUrl.trim()
+            : typeof adminSite.logoUrl === "string"
+              ? adminSite.logoUrl.trim()
+              : prev.companyLogoLightUrl,
+          companyLogoDarkUrl: typeof adminSite.companyLogoDarkUrl === "string" && adminSite.companyLogoDarkUrl.trim()
+            ? adminSite.companyLogoDarkUrl.trim()
+            : typeof adminSite.logoUrl === "string"
+              ? adminSite.logoUrl.trim()
+              : prev.companyLogoDarkUrl,
+          faviconUrl: typeof adminSite.faviconUrl === "string" ? adminSite.faviconUrl.trim() : prev.faviconUrl,
+          companyMainDomain: typeof adminSite.companyMainDomain === "string" ? adminSite.companyMainDomain.trim() : prev.companyMainDomain,
+          footerText: typeof adminSite.footerText === "string" ? adminSite.footerText.trim() : prev.footerText,
+        }));
+      } catch {
+        // No-op: keep defaults when settings cannot be loaded.
+      }
+    }
+
+    void loadSiteBranding();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const titleBase = siteBranding.siteTitle || "DefibotX";
+    const titleSuffix = siteBranding.tagline ? ` - ${siteBranding.tagline}` : "";
+    document.title = `${titleBase}${titleSuffix}`;
+
+    if (!siteBranding.faviconUrl) {
+      return;
+    }
+
+    const existing = document.querySelector('link[rel~="icon"]') as HTMLLinkElement | null;
+    if (existing) {
+      existing.href = siteBranding.faviconUrl;
+      return;
+    }
+
+    const link = document.createElement("link");
+    link.rel = "icon";
+    link.href = siteBranding.faviconUrl;
+    document.head.appendChild(link);
+  }, [siteBranding.faviconUrl, siteBranding.siteTitle, siteBranding.tagline]);
+
+  const activeLogoUrl = theme === "light"
+    ? siteBranding.companyLogoLightUrl || siteBranding.companyLogoDarkUrl
+    : siteBranding.companyLogoDarkUrl || siteBranding.companyLogoLightUrl;
+
   const menuItems: MenuSection[] = [
     {
       section: "Main",
       items: [
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
         { id: "my-bots", label: "My Bots", icon: LineChart, href: "/my-bots" },
-      ],
-    },
-    {
-      section: "Preferences",
-      items: [
         { id: "invite-friends", label: "Invite Friends", icon: UserPlus, href: "/invite-friends" },
         { id: "subscription", label: "Subscription", icon: CreditCard, href: "/subscription" },
       ],
@@ -181,6 +269,9 @@ export function DashboardSidebar({ collapsed }: Props) {
   ];
 
   const footerItems = [
+    ...(sessionUser?.is_admin
+      ? [{ id: "admin", label: "Admin", icon: Shield, href: "/admin" }]
+      : []),
     { id: "settings", label: "Settings", icon: Settings, href: "/settings" },
     { id: "logout", label: "Logout", icon: LogOut, href: "/api/auth/logout" },
   ];
@@ -203,12 +294,16 @@ export function DashboardSidebar({ collapsed }: Props) {
         <div className={cn("flex h-16 items-center py-4", collapsed ? "justify-center px-0" : "justify-center px-3")}>
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
-              <Bot className="h-6 w-6 text-primary-foreground" />
+              {activeLogoUrl ? (
+                <img src={activeLogoUrl} alt={siteBranding.siteTitle || "Site logo"} className="h-7 w-7 object-contain" />
+              ) : (
+                <Bot className="h-6 w-6 text-primary-foreground" />
+              )}
             </div>
             {!collapsed && (
               <div className="flex flex-col">
-                <span className="text-lg font-semibold tracking-tight">DefibotX</span>
-                <span className="text-xs text-muted-foreground">AI Trading</span>
+                <span className="text-lg font-semibold tracking-tight">{siteBranding.siteTitle || "DefibotX"}</span>
+                <span className="text-xs text-muted-foreground">{siteBranding.tagline || "AI Trading"}</span>
               </div>
             )}
           </div>
@@ -342,6 +437,10 @@ export function DashboardSidebar({ collapsed }: Props) {
                 </Tooltip>
               )}
             </div>
+
+            {!collapsed && siteBranding.footerText && (
+              <p className="mt-3 px-1 text-center text-[11px] text-muted-foreground">{siteBranding.footerText}</p>
+            )}
           </div>
         </TooltipProvider>
       </aside>

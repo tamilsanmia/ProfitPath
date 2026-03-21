@@ -19,39 +19,25 @@ type SettingsBody = {
   maxOpenOrder?: number;
   stoplossPct?: number;
   dcaStoplossPct?: number;
-  entry5mEnabled?: boolean;
-  entry15mEnabled?: boolean;
   entry30mEnabled?: boolean;
   entry1hEnabled?: boolean;
   entry4hEnabled?: boolean;
   useChgFilter?: boolean;
-  chg5mEnabled?: boolean;
-  chg15mEnabled?: boolean;
   chg30mEnabled?: boolean;
   chg1hEnabled?: boolean;
   chg4hEnabled?: boolean;
-  chg5mMin?: number;
-  chg5mMax?: number;
-  chg15mMin?: number;
-  chg15mMax?: number;
   chg30mMin?: number;
   chg30mMax?: number;
   chg1hMin?: number;
   chg1hMax?: number;
   chg4hMin?: number;
   chg4hMax?: number;
-  dcaChg5mMin?: number;
-  dcaChg5mMax?: number;
-  dcaChg15mMin?: number;
-  dcaChg15mMax?: number;
   dcaChg30mMin?: number;
   dcaChg30mMax?: number;
   dcaChg1hMin?: number;
   dcaChg1hMax?: number;
   dcaChg4hMin?: number;
   dcaChg4hMax?: number;
-  chg5mExitBuffer?: number;
-  chg15mExitBuffer?: number;
   chg30mExitBuffer?: number;
   chg1hExitBuffer?: number;
   chg4hExitBuffer?: number;
@@ -107,39 +93,25 @@ export async function PUT(request: Request, { params }: Params) {
           max_open_order: Number(body.maxOpenOrder ?? 15),
           stoploss_pct: Number(body.stoplossPct ?? 99),
           dca_stoploss_pct: Number(body.dcaStoplossPct ?? 50),
-          entry_5m_enabled: Boolean(body.entry5mEnabled ?? true),
-          entry_15m_enabled: Boolean(body.entry15mEnabled ?? false),
           entry_30m_enabled: Boolean(body.entry30mEnabled ?? false),
           entry_1h_enabled: Boolean(body.entry1hEnabled ?? false),
           entry_4h_enabled: Boolean(body.entry4hEnabled ?? false),
           use_chg_filter: Boolean(body.useChgFilter ?? true),
-          chg_5m_enabled: Boolean(body.chg5mEnabled ?? true),
-          chg_15m_enabled: Boolean(body.chg15mEnabled ?? true),
           chg_30m_enabled: Boolean(body.chg30mEnabled ?? true),
           chg_1h_enabled: Boolean(body.chg1hEnabled ?? true),
           chg_4h_enabled: Boolean(body.chg4hEnabled ?? true),
-          chg_5m_min: Number(body.chg5mMin ?? -10),
-          chg_5m_max: Number(body.chg5mMax ?? 10),
-          chg_15m_min: Number(body.chg15mMin ?? -10),
-          chg_15m_max: Number(body.chg15mMax ?? 10),
           chg_30m_min: Number(body.chg30mMin ?? -10),
           chg_30m_max: Number(body.chg30mMax ?? 10),
           chg_1h_min: Number(body.chg1hMin ?? -10),
           chg_1h_max: Number(body.chg1hMax ?? 10),
           chg_4h_min: Number(body.chg4hMin ?? -10),
           chg_4h_max: Number(body.chg4hMax ?? 10),
-          dca_chg_5m_min: Number(body.dcaChg5mMin ?? -5),
-          dca_chg_5m_max: Number(body.dcaChg5mMax ?? 5),
-          dca_chg_15m_min: Number(body.dcaChg15mMin ?? -10),
-          dca_chg_15m_max: Number(body.dcaChg15mMax ?? 10),
           dca_chg_30m_min: Number(body.dcaChg30mMin ?? -10),
           dca_chg_30m_max: Number(body.dcaChg30mMax ?? 10),
           dca_chg_1h_min: Number(body.dcaChg1hMin ?? -10),
           dca_chg_1h_max: Number(body.dcaChg1hMax ?? 10),
           dca_chg_4h_min: Number(body.dcaChg4hMin ?? -10),
           dca_chg_4h_max: Number(body.dcaChg4hMax ?? 10),
-          chg_5m_exit_buffer: Number(body.chg5mExitBuffer ?? 2),
-          chg_15m_exit_buffer: Number(body.chg15mExitBuffer ?? 2),
           chg_30m_exit_buffer: Number(body.chg30mExitBuffer ?? 2),
           chg_1h_exit_buffer: Number(body.chg1hExitBuffer ?? 2),
           chg_4h_exit_buffer: Number(body.chg4hExitBuffer ?? 2),

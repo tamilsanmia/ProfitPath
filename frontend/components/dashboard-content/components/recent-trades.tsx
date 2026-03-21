@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime"
 import { ChevronUp } from "lucide-react"
 import type { RecentTrade } from "../types"
 
@@ -31,7 +32,7 @@ export function RecentTrades({ trades }: RecentTradesProps) {
               <div
                 className={`ml-auto font-medium ${trade.changeType === "positive" ? "text-green-500" : "text-red-500"}`}
               >
-                {trade.changeType === "positive" ? "+" : "-"}${trade.value}
+                {trade.changeType === "positive" ? "+" : "-"}{formatCurrencyFromUsd(trade.value)}
               </div>
             </div>
           ))}

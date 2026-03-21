@@ -5,8 +5,11 @@ import { StatsCards } from "./components/stats/stats-cards"
 import { AssetsSection } from "./components/assets/assets-section"
 import { AccountsSection } from "./components/accounts/accounts-section"
 import { useOverviewDashboard } from "./hooks/use-overview-dashboard"
+import { useCurrencyRealtime } from "@/hooks/use-currency-realtime"
 
 export function OverviewDashboard() {
+  useCurrencyRealtime()
+
   const { dateRange, setDateRange, filters, updateFilter, filteredAssets, filteredAccounts, totalPortfolioValue } =
     useOverviewDashboard()
 

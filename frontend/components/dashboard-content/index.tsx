@@ -6,6 +6,7 @@ import { ProfitChart } from "./components/profit-chart";
 import { RecentTrades } from "./components/recent-trades";
 import { TopBots } from "./components/top-bots";
 import { WalletOverview } from "./components/wallet-overview";
+import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
 import { kpiCardsData, profitData, recentTradesData, topBotsData, walletAssetsData } from "./data";
 import { useDashboard } from "./hooks/use-dashboard";
 
@@ -21,6 +22,8 @@ type BackendHealth = {
 };
 
 export function DashboardContent() {
+  useCurrencyRealtime();
+
   const { profitTimeframe, handleTimeframeChange } = useDashboard();
   const [usersCount, setUsersCount] = useState<number | null>(null);
   const [health, setHealth] = useState<BackendHealth | null>(null);

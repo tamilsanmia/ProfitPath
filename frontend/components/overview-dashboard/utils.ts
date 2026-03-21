@@ -1,4 +1,5 @@
 import type { Asset, Account } from "./types"
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime"
 
 export const formatNumber = (num: number): string => {
   return num.toLocaleString(undefined, {
@@ -8,7 +9,7 @@ export const formatNumber = (num: number): string => {
 }
 
 export const formatCurrency = (num: number): string => {
-  return `$${formatNumber(num)}`
+  return formatCurrencyFromUsd(num)
 }
 
 export const formatPercentage = (num: number): string => {

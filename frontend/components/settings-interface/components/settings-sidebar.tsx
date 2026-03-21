@@ -12,10 +12,12 @@ interface SettingsSidebarProps {
   onTabChange: (tab: string) => void;
   hasUnsavedChanges: boolean;
   language: string;
+  isAdmin: boolean;
 }
 
-export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ activeTab, onTabChange, hasUnsavedChanges, language }) => {
+export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ activeTab, onTabChange, hasUnsavedChanges, language, isAdmin }) => {
   const t = createSettingsTranslator(language);
+  const visibleTabs = SETTINGS_TABS.filter((tab) => tab.id !== "admin" || isAdmin);
 
   return (
     <div className="md:w-64 md:border-r bg-muted/10">
@@ -25,7 +27,7 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ activeTab, onT
       </div>
       <div className="h-[calc(100vh-8rem)]">
         <div className="p-2 space-y-1">
-          {SETTINGS_TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const IconComponent = Icons[tab.icon as keyof typeof Icons] as React.ComponentType<{ className?: string }>;
             const labelKey = `tab.${tab.id}.label` as const;
             const descriptionKey = `tab.${tab.id}.description` as const;

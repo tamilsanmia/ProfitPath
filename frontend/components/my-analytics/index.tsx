@@ -6,11 +6,14 @@ import { AnalyticsTabs } from "./components/analytics-tabs";
 import { KpiCards } from "./components/kpi-cards";
 import { MarketSummary } from "./components/market-summary";
 import { PerformanceChart } from "./components/performance-chart";
+import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
 import { useColumns } from "./hooks/use-columns";
 import { useFilters } from "./hooks/use-filters";
 import type { SignalBot, SignalProvider, Trader } from "./types";
 
 export function MyAnalytics() {
+  useCurrencyRealtime();
+
   const { filters, handleFilterChange, resetFilters } = useFilters();
   const { visibleColumns, handleColumnVisibilityChange, resetColumns } = useColumns();
   const { toast } = useToast();

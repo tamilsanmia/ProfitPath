@@ -12,6 +12,7 @@ services:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
       HOSTNAME: "0.0.0.0"
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       BACKEND_URL: http://profitpath-backend:8000
       NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}

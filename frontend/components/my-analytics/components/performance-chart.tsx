@@ -1,5 +1,6 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime"
 import { performanceData } from "../data"
 
 export function PerformanceChart() {
@@ -15,7 +16,7 @@ export function PerformanceChart() {
             <LineChart data={performanceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="date" className="text-xs fill-muted-foreground" />
-              <YAxis className="text-xs fill-muted-foreground" tickFormatter={(value) => `$${value}`} />
+              <YAxis className="text-xs fill-muted-foreground" tickFormatter={(value) => formatCurrencyFromUsd(Number(value))} />
               <Tooltip
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
@@ -25,7 +26,7 @@ export function PerformanceChart() {
                         <div className="mt-2 space-y-1">
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-sm text-muted-foreground">Profit:</span>
-                            <span className="font-medium text-green-500">${payload[0]?.value?.toLocaleString()}</span>
+                            <span className="font-medium text-green-500">{formatCurrencyFromUsd(Number(payload[0]?.value ?? 0))}</span>
                           </div>
                           <div className="flex items-center justify-between gap-4">
                             <span className="text-sm text-muted-foreground">Trades:</span>

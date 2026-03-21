@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { useCurrencyRealtime } from "@/hooks/use-currency-realtime"
+import { formatCurrencyFromUsd, getPreferredCurrency } from "@/lib/currency-runtime"
 import { cn } from "@/lib/utils"
 import {
   Archive,
@@ -54,7 +56,7 @@ import {
   useBotPerformance,
   useBotDaily,
 } from "@/hooks/use-bot-data"
-import type { FtOpenTrade, FtClosedTrade, FtPerformance, FtBotEntry } from "@/hooks/use-bot-data"
+import type { FtOpenTrade, FtClosedTrade, FtPerformance, FtBotEntry, FtStats } from "@/hooks/use-bot-data"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +70,7 @@ function fmt(n: unknown, decimals = 2) {
   return safe.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
 }
 function fmtPct(n: unknown) { return (toSafeNumber(n) * 100).toFixed(2) + "%" }
-function fmtUsd(n: unknown) { return "$" + fmt(n) }
+function fmtUsd(n: unknown) { return formatCurrencyFromUsd(toSafeNumber(n)) }
 
 function fmtBotDisplayId(id?: string) {
   return String(id || "-")
@@ -186,6 +188,48 @@ function Spinner() {
   return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
 }
 
+function OrderDetailsSkeleton() {
+  return (
+    <div className="space-y-4 pb-4" aria-hidden="true">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+          <div className="h-6 w-28 animate-pulse rounded bg-muted/40" />
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div key={`general-${index}`} className="flex items-center justify-between gap-4">
+              <div className="h-4 w-24 animate-pulse rounded bg-muted/30" />
+              <div className="h-4 w-28 animate-pulse rounded bg-muted/40" />
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, blockIndex) => (
+            <div key={`detail-block-${blockIndex}`} className="space-y-3 rounded-md border border-border bg-muted/10 p-3">
+              <div className="h-6 w-24 animate-pulse rounded bg-muted/40" />
+              {Array.from({ length: 4 }).map((__, rowIndex) => (
+                <div key={`detail-row-${blockIndex}-${rowIndex}`} className="flex items-center justify-between gap-4">
+                  <div className="h-4 w-24 animate-pulse rounded bg-muted/30" />
+                  <div className="h-4 w-24 animate-pulse rounded bg-muted/40" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-md border border-border bg-black/40 p-3">
+        <div className="flex items-center justify-between border-b border-border pb-2">
+          <div className="h-6 w-24 animate-pulse rounded bg-muted/40" />
+          <div className="h-4 w-28 animate-pulse rounded bg-muted/30" />
+        </div>
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={`order-${index}`} className="h-5 w-full animate-pulse rounded bg-muted/30" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 type OpenTradeAction = "forceexit_limit" | "forceexit_market" | "forceexit_partial" | "reload" | "delete_trade"
 
 type FtTradeDetailOrder = {
@@ -282,7 +326,7 @@ function TradeRow({
           {t.amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 8 })}
         </td>
         <td className="py-2 pr-4 text-muted-foreground">
-          {fmt(t.stake_amount, 3)}
+          {fmtUsd(t.stake_amount)}
           {typeof t.leverage === "number" && Number.isFinite(t.leverage) ? ` (${fmt(t.leverage, 0)}x)` : ""}
         </td>
         <td className="py-2 pr-4 text-muted-foreground">
@@ -292,7 +336,7 @@ function TradeRow({
           {t.current_rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
         </td>
         <td className={cn("min-w-[150px] whitespace-nowrap py-2 pr-4", pnlClass)}>
-          {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}% ({fmt(t.profit_abs, 3)})
+          {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}% ({fmtUsd(t.profit_abs)})
         </td>
         <td className="py-2 pr-4 text-muted-foreground">
           <span>{fmtDateTime(t.open_date)}</span>
@@ -354,7 +398,7 @@ function TradeRow({
         {typeof t.amount === "number" ? t.amount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 8 }) : "-"}
       </td>
       <td className="py-2 pr-4 text-muted-foreground">
-        {"stake_amount" in t ? fmt(t.stake_amount, 3) : "-"}
+        {"stake_amount" in t ? fmtUsd(t.stake_amount) : "-"}
         {typeof t.leverage === "number" && Number.isFinite(t.leverage) ? ` (${fmt(t.leverage, 0)}x)` : ""}
       </td>
       <td className="py-2 pr-4 text-muted-foreground">
@@ -364,7 +408,7 @@ function TradeRow({
         {"close_rate" in t ? t.close_rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }) : "-"}
       </td>
       <td className={cn("min-w-[150px] whitespace-nowrap py-2 pr-4", pnlClass)}>
-        {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}% ({fmt(t.profit_abs, 3)})
+        {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(2)}% ({fmtUsd(t.profit_abs)})
       </td>
       <td className="py-2 pr-4 text-muted-foreground">{fmtDateTime(t.open_date)}</td>
       <td className="py-2 pr-4 text-muted-foreground">{"close_date" in t ? fmtDateTime(t.close_date) : "-"}</td>
@@ -407,6 +451,7 @@ function BotSummaryCard({
   onSelect,
   archived,
   onToggleArchived,
+  statsOverride,
 }: {
   bot: FtBotEntry
   isSelected: boolean
@@ -414,24 +459,28 @@ function BotSummaryCard({
   onSelect: () => void
   archived: boolean
   onToggleArchived: (botId: string) => void
+  statsOverride?: FtStats | null
 }) {
   const { data: stats, loading } = useBotStats(bot.id)
+  const resolvedStats = statsOverride ?? stats
+  const resolvedLoading = statsOverride ? false : loading
+  const showPreloader = resolvedLoading && !resolvedStats
 
-  const status = stats?.config?.state ?? (loading ? "Loading" : "Unknown")
+  const status = resolvedStats?.config?.state ?? (resolvedLoading ? "Loading" : "Unknown")
   const setupCompleted = status.toLowerCase() !== "pending_setup"
-  const statusLabel = setupCompleted ? (archived ? "Archived" : "Live") : "New"
+  const statusLabel = setupCompleted ? (archived ? "Archived" : "Running") : "New"
   const statusClassName = setupCompleted
     ? archived
       ? "rounded-full border border-slate-500/40 bg-slate-500/15 px-2.5 py-0.5 text-[11px] font-medium text-slate-200"
       : "rounded-full border border-emerald-400/20 bg-emerald-500/12 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300"
     : "rounded-full border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200"
-  const capital = Number(stats?.balance_usdt ?? 0)
-  const pnlClosed = Number(stats?.profit?.profit_closed_fiat ?? 0)
-  const openProfit = Number(stats?.profit?.profit_all_coin ?? 0) - Number(stats?.profit?.profit_closed_coin ?? 0)
-  const rawProfitPercent = Number(stats?.profit?.profit_closed_percent ?? 0)
+  const capital = Number(resolvedStats?.balance_usdt ?? 0)
+  const pnlClosed = Number(resolvedStats?.profit?.profit_closed_fiat ?? 0)
+  const openProfit = Number(resolvedStats?.profit?.profit_all_coin ?? 0) - Number(resolvedStats?.profit?.profit_closed_coin ?? 0)
+  const rawProfitPercent = Number(resolvedStats?.profit?.profit_closed_percent ?? 0)
   const profitPercent = Math.abs(rawProfitPercent) <= 1 ? rawProfitPercent * 100 : rawProfitPercent
-  const exchangeName = normalizeExchangeName(String(stats?.config?.exchange || bot.name))
-  const tradeType = inferTradeTypeLabel(bot.name, stats?.config?.stake_amount)
+  const exchangeName = normalizeExchangeName(String(resolvedStats?.config?.exchange || bot.name))
+  const tradeType = inferTradeTypeLabel(bot.name, resolvedStats?.config?.stake_amount)
   const favicon = exchangeFaviconUrl(exchangeName)
   const isDemo = (bot.account_type || "").toLowerCase().includes("demo")
   const isReal = (bot.account_type || "").toLowerCase().includes("real")
@@ -456,12 +505,12 @@ function BotSummaryCard({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <img src={favicon} alt={exchangeName} className="h-4 w-4 rounded-sm" />
+            <div className="flex items-center gap-2.5">
+              <img src={favicon} alt={exchangeName} className="h-[18px] w-[18px] rounded-sm" />
               <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isDemo && (
               <Badge className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">Demo</Badge>
             )}
@@ -473,10 +522,10 @@ function BotSummaryCard({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                  className="ml-0.5 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/60 p-0 text-muted-foreground hover:text-foreground"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
@@ -494,12 +543,18 @@ function BotSummaryCard({
           </div>
         </div>
 
-        <div className="text-[12px] font-medium text-[#99a1af]">
-          <span>{fmt(Math.max(0, capital), 0)} USDT</span>
-          <span className="mx-2">•</span>
-          <span>{exchangeName}</span>
-          <span className="mx-2">•</span>
-          <span>{tradeType}</span>
+        <div className="pt-[5px] text-[12px] font-medium text-[#99a1af]">
+          {showPreloader ? (
+            <div className="h-4 w-44 animate-pulse rounded bg-muted/40" />
+          ) : (
+            <>
+              <span>{fmtUsd(Math.max(0, capital))}</span>
+              <span className="mx-2">•</span>
+              <span>{exchangeName}</span>
+              <span className="mx-2">•</span>
+              <span>{tradeType}</span>
+            </>
+          )}
         </div>
       </div>
     )
@@ -517,12 +572,12 @@ function BotSummaryCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <img src={favicon} alt={exchangeName} className="h-4 w-4 rounded-sm" />
+            <div className="flex items-center gap-2.5">
+              <img src={favicon} alt={exchangeName} className="h-[18px] w-[18px] rounded-sm" />
               <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {isDemo && (
               <Badge className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">Demo</Badge>
             )}
@@ -534,10 +589,10 @@ function BotSummaryCard({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                  className="ml-0.5 flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/60 p-0 text-muted-foreground hover:text-foreground"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
@@ -556,40 +611,57 @@ function BotSummaryCard({
         </div>
 
         <div className="text-[12px] font-medium text-[#99a1af]">
-          <span>{fmt(Math.max(0, capital), 0)} USDT</span>
-          <span className="mx-2">•</span>
-          <span>{exchangeName}</span>
-          <span className="mx-2">•</span>
-          <span>{tradeType}</span>
+          {showPreloader ? (
+            <div className="h-4 w-52 animate-pulse rounded bg-muted/40" />
+          ) : (
+            <>
+              <span>{fmtUsd(Math.max(0, capital))}</span>
+              <span className="mx-2">•</span>
+              <span>{exchangeName}</span>
+              <span className="mx-2">•</span>
+              <span>{tradeType}</span>
+            </>
+          )}
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-border/80 bg-background/40 p-3 sm:grid-cols-4">
-          <div>
-            <p className="text-[11px] text-[#99a1af]">Balance</p>
-            <p className="text-sm font-semibold text-foreground">{fmtUsd(capital)}</p>
+        {showPreloader ? (
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-background/40">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item}>
+                <div className="h-3 w-14 animate-pulse rounded bg-muted/40" />
+                <div className="mt-2 h-4 w-20 animate-pulse rounded bg-muted/50" />
+              </div>
+            ))}
           </div>
-          <div>
-            <p className="text-[11px] text-[#99a1af]">P&amp;L</p>
-            <p className={cn("text-sm font-semibold", pnlClosed >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {pnlClosed >= 0 ? "+" : ""}
-              {fmtUsd(pnlClosed)}
-            </p>
+        ) : (
+          <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-background/40">
+            <div>
+              <p className="pt-[5px] text-[11px] text-[#99a1af]">Balance</p>
+              <p className="text-[12px] font-semibold text-foreground">{fmtUsd(capital)}</p>
+            </div>
+            <div>
+              <p className="pt-[5px] text-[11px] text-[#99a1af]">P&amp;L</p>
+              <p className={cn("text-[12px] font-semibold", pnlClosed >= 0 ? "text-emerald-400" : "text-red-400")}>
+                {pnlClosed >= 0 ? "+" : ""}
+                {fmtUsd(pnlClosed)}
+              </p>
+            </div>
+            <div>
+              <p className="pt-[5px] text-[11px] text-[#99a1af]">Profit %</p>
+              <p className={cn("text-[12px] font-semibold", profitPercent >= 0 ? "text-emerald-400" : "text-red-400")}>
+                {profitPercent >= 0 ? "+" : ""}
+                {profitPercent.toFixed(2)}%
+              </p>
+            </div>
+            <div>
+              <p className="pt-[5px] text-[11px] text-[#99a1af]">Open Profit</p>
+              <p className={cn("text-[12px] font-semibold", openProfit >= 0 ? "text-emerald-400" : "text-red-400")}>
+                {openProfit >= 0 ? "+" : ""}
+                {fmtUsd(openProfit)}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] text-[#99a1af]">Open Profit</p>
-            <p className={cn("text-sm font-semibold", openProfit >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {openProfit >= 0 ? "+" : ""}
-              {fmtUsd(openProfit)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] text-[#99a1af]">Profit %</p>
-            <p className={cn("text-sm font-semibold", profitPercent >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {profitPercent >= 0 ? "+" : ""}
-              {profitPercent.toFixed(2)}%
-            </p>
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -598,6 +670,9 @@ function BotSummaryCard({
 // ─── main export ──────────────────────────────────────────────────────────────
 
 export function MyBotsPage({ initialBotId = null, publicView = false }: { initialBotId?: string | null; publicView?: boolean } = {}) {
+  useCurrencyRealtime()
+  const displayCurrency = getPreferredCurrency()
+
   const searchParams = useSearchParams()
   const paymentDone = searchParams.get("payment") === "done"
   const purchasedBotId = searchParams.get("bot")
@@ -629,39 +704,25 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
       max_open_order?: number
       stoploss_pct?: number
       dca_stoploss_pct?: number
-      entry_5m_enabled?: boolean
-      entry_15m_enabled?: boolean
       entry_30m_enabled?: boolean
       entry_1h_enabled?: boolean
       entry_4h_enabled?: boolean
       use_chg_filter?: boolean
-      chg_5m_enabled?: boolean
-      chg_15m_enabled?: boolean
       chg_30m_enabled?: boolean
       chg_1h_enabled?: boolean
       chg_4h_enabled?: boolean
-      chg_5m_min?: number
-      chg_5m_max?: number
-      chg_15m_min?: number
-      chg_15m_max?: number
       chg_30m_min?: number
       chg_30m_max?: number
       chg_1h_min?: number
       chg_1h_max?: number
       chg_4h_min?: number
       chg_4h_max?: number
-      dca_chg_5m_min?: number
-      dca_chg_5m_max?: number
-      dca_chg_15m_min?: number
-      dca_chg_15m_max?: number
       dca_chg_30m_min?: number
       dca_chg_30m_max?: number
       dca_chg_1h_min?: number
       dca_chg_1h_max?: number
       dca_chg_4h_min?: number
       dca_chg_4h_max?: number
-      chg_5m_exit_buffer?: number
-      chg_15m_exit_buffer?: number
       chg_30m_exit_buffer?: number
       chg_1h_exit_buffer?: number
       chg_4h_exit_buffer?: number
@@ -700,44 +761,30 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     maxOpenOrder: 15,
     stoplossPct: 99,
     dcaStoplossPct: 50,
-    entry5mEnabled: true,
-    entry15mEnabled: false,
     entry30mEnabled: false,
     entry1hEnabled: false,
     entry4hEnabled: false,
     useChgFilter: true,
-    chg5mEnabled: true,
-    chg15mEnabled: true,
     chg30mEnabled: true,
     chg1hEnabled: true,
     chg4hEnabled: true,
-    chg5mMin: -10,
-    chg5mMax: 10,
-    chg15mMin: -10,
-    chg15mMax: 10,
     chg30mMin: -10,
     chg30mMax: 10,
     chg1hMin: -10,
     chg1hMax: 10,
     chg4hMin: -10,
     chg4hMax: 10,
-    dcaChg5mMin: -5,
-    dcaChg5mMax: 5,
-    dcaChg15mMin: -10,
-    dcaChg15mMax: 10,
     dcaChg30mMin: -10,
     dcaChg30mMax: 10,
     dcaChg1hMin: -10,
     dcaChg1hMax: 10,
     dcaChg4hMin: -10,
     dcaChg4hMax: 10,
-    chg5mExitBuffer: 2,
-    chg15mExitBuffer: 2,
     chg30mExitBuffer: 2,
     chg1hExitBuffer: 2,
     chg4hExitBuffer: 2,
-    dcaReentryMinProfit: -0.05,
-    dcaReentryMaxDrawdown: -0.3,
+    dcaReentryMinProfit: -5,
+    dcaReentryMaxDrawdown: -30,
     leverage: 5,
   })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
@@ -838,39 +885,25 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
               max_open_order?: number
               stoploss_pct?: number
               dca_stoploss_pct?: number
-              entry_5m_enabled?: boolean
-              entry_15m_enabled?: boolean
               entry_30m_enabled?: boolean
               entry_1h_enabled?: boolean
               entry_4h_enabled?: boolean
               use_chg_filter?: boolean
-              chg_5m_enabled?: boolean
-              chg_15m_enabled?: boolean
               chg_30m_enabled?: boolean
               chg_1h_enabled?: boolean
               chg_4h_enabled?: boolean
-              chg_5m_min?: number
-              chg_5m_max?: number
-              chg_15m_min?: number
-              chg_15m_max?: number
               chg_30m_min?: number
               chg_30m_max?: number
               chg_1h_min?: number
               chg_1h_max?: number
               chg_4h_min?: number
               chg_4h_max?: number
-              dca_chg_5m_min?: number
-              dca_chg_5m_max?: number
-              dca_chg_15m_min?: number
-              dca_chg_15m_max?: number
               dca_chg_30m_min?: number
               dca_chg_30m_max?: number
               dca_chg_1h_min?: number
               dca_chg_1h_max?: number
               dca_chg_4h_min?: number
               dca_chg_4h_max?: number
-              chg_5m_exit_buffer?: number
-              chg_15m_exit_buffer?: number
               chg_30m_exit_buffer?: number
               chg_1h_exit_buffer?: number
               chg_4h_exit_buffer?: number
@@ -1015,6 +1048,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     const dcaStoplossPctRaw = Number(runtime?.dca_stoploss_pct)
     const maxOpenRaw = Number(runtime?.max_open_order ?? config?.max_open_trades ?? 15)
     const leverageRaw = Number(runtime?.leverage ?? 5)
+    const dcaReentryMinRaw = Number(runtime?.dca_reentry_min_profit ?? -0.05)
+    const dcaReentryMaxRaw = Number(runtime?.dca_reentry_max_drawdown ?? -0.3)
 
     setSettingsForm({
       tradeType,
@@ -1023,44 +1058,30 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
       maxOpenOrder: Number.isFinite(maxOpenRaw) ? Math.max(1, Math.min(100, Math.trunc(maxOpenRaw))) : 15,
       stoplossPct: Number.isFinite(stoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(stoplossPctRaw))) : 99,
       dcaStoplossPct: Number.isFinite(dcaStoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(dcaStoplossPctRaw))) : 50,
-      entry5mEnabled: runtime?.entry_5m_enabled ?? true,
-      entry15mEnabled: runtime?.entry_15m_enabled ?? false,
       entry30mEnabled: runtime?.entry_30m_enabled ?? false,
       entry1hEnabled: runtime?.entry_1h_enabled ?? false,
       entry4hEnabled: runtime?.entry_4h_enabled ?? false,
       useChgFilter: runtime?.use_chg_filter ?? true,
-      chg5mEnabled: runtime?.chg_5m_enabled ?? true,
-      chg15mEnabled: runtime?.chg_15m_enabled ?? true,
       chg30mEnabled: runtime?.chg_30m_enabled ?? true,
       chg1hEnabled: runtime?.chg_1h_enabled ?? true,
       chg4hEnabled: runtime?.chg_4h_enabled ?? true,
-      chg5mMin: Number(runtime?.chg_5m_min ?? -10),
-      chg5mMax: Number(runtime?.chg_5m_max ?? 10),
-      chg15mMin: Number(runtime?.chg_15m_min ?? -10),
-      chg15mMax: Number(runtime?.chg_15m_max ?? 10),
       chg30mMin: Number(runtime?.chg_30m_min ?? -10),
       chg30mMax: Number(runtime?.chg_30m_max ?? 10),
       chg1hMin: Number(runtime?.chg_1h_min ?? -10),
       chg1hMax: Number(runtime?.chg_1h_max ?? 10),
       chg4hMin: Number(runtime?.chg_4h_min ?? -10),
       chg4hMax: Number(runtime?.chg_4h_max ?? 10),
-      dcaChg5mMin: Number(runtime?.dca_chg_5m_min ?? -5),
-      dcaChg5mMax: Number(runtime?.dca_chg_5m_max ?? 5),
-      dcaChg15mMin: Number(runtime?.dca_chg_15m_min ?? -10),
-      dcaChg15mMax: Number(runtime?.dca_chg_15m_max ?? 10),
       dcaChg30mMin: Number(runtime?.dca_chg_30m_min ?? -10),
       dcaChg30mMax: Number(runtime?.dca_chg_30m_max ?? 10),
       dcaChg1hMin: Number(runtime?.dca_chg_1h_min ?? -10),
       dcaChg1hMax: Number(runtime?.dca_chg_1h_max ?? 10),
       dcaChg4hMin: Number(runtime?.dca_chg_4h_min ?? -10),
       dcaChg4hMax: Number(runtime?.dca_chg_4h_max ?? 10),
-      chg5mExitBuffer: Number(runtime?.chg_5m_exit_buffer ?? 2),
-      chg15mExitBuffer: Number(runtime?.chg_15m_exit_buffer ?? 2),
       chg30mExitBuffer: Number(runtime?.chg_30m_exit_buffer ?? 2),
       chg1hExitBuffer: Number(runtime?.chg_1h_exit_buffer ?? 2),
       chg4hExitBuffer: Number(runtime?.chg_4h_exit_buffer ?? 2),
-      dcaReentryMinProfit: Number(runtime?.dca_reentry_min_profit ?? -0.05),
-      dcaReentryMaxDrawdown: Number(runtime?.dca_reentry_max_drawdown ?? -0.3),
+      dcaReentryMinProfit: Number.isFinite(dcaReentryMinRaw) ? (Math.abs(dcaReentryMinRaw) <= 1 ? dcaReentryMinRaw * 100 : dcaReentryMinRaw) : -5,
+      dcaReentryMaxDrawdown: Number.isFinite(dcaReentryMaxRaw) ? (Math.abs(dcaReentryMaxRaw) <= 1 ? dcaReentryMaxRaw * 100 : dcaReentryMaxRaw) : -30,
       leverage: Number.isFinite(leverageRaw) ? Math.max(1, Math.min(125, leverageRaw)) : 5,
     })
   }, [setupState?.strategy_settings, stats?.config])
@@ -1869,44 +1890,30 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
         maxOpenOrder: settingsForm.maxOpenOrder,
         stoplossPct: settingsForm.stoplossPct,
         dcaStoplossPct: settingsForm.dcaStoplossPct,
-        entry5mEnabled: settingsForm.entry5mEnabled,
-        entry15mEnabled: settingsForm.entry15mEnabled,
         entry30mEnabled: settingsForm.entry30mEnabled,
         entry1hEnabled: settingsForm.entry1hEnabled,
         entry4hEnabled: settingsForm.entry4hEnabled,
         useChgFilter: settingsForm.useChgFilter,
-        chg5mEnabled: settingsForm.chg5mEnabled,
-        chg15mEnabled: settingsForm.chg15mEnabled,
         chg30mEnabled: settingsForm.chg30mEnabled,
         chg1hEnabled: settingsForm.chg1hEnabled,
         chg4hEnabled: settingsForm.chg4hEnabled,
-        chg5mMin: settingsForm.chg5mMin,
-        chg5mMax: settingsForm.chg5mMax,
-        chg15mMin: settingsForm.chg15mMin,
-        chg15mMax: settingsForm.chg15mMax,
         chg30mMin: settingsForm.chg30mMin,
         chg30mMax: settingsForm.chg30mMax,
         chg1hMin: settingsForm.chg1hMin,
         chg1hMax: settingsForm.chg1hMax,
         chg4hMin: settingsForm.chg4hMin,
         chg4hMax: settingsForm.chg4hMax,
-        dcaChg5mMin: settingsForm.dcaChg5mMin,
-        dcaChg5mMax: settingsForm.dcaChg5mMax,
-        dcaChg15mMin: settingsForm.dcaChg15mMin,
-        dcaChg15mMax: settingsForm.dcaChg15mMax,
         dcaChg30mMin: settingsForm.dcaChg30mMin,
         dcaChg30mMax: settingsForm.dcaChg30mMax,
         dcaChg1hMin: settingsForm.dcaChg1hMin,
         dcaChg1hMax: settingsForm.dcaChg1hMax,
         dcaChg4hMin: settingsForm.dcaChg4hMin,
         dcaChg4hMax: settingsForm.dcaChg4hMax,
-        chg5mExitBuffer: settingsForm.chg5mExitBuffer,
-        chg15mExitBuffer: settingsForm.chg15mExitBuffer,
         chg30mExitBuffer: settingsForm.chg30mExitBuffer,
         chg1hExitBuffer: settingsForm.chg1hExitBuffer,
         chg4hExitBuffer: settingsForm.chg4hExitBuffer,
-        dcaReentryMinProfit: settingsForm.dcaReentryMinProfit,
-        dcaReentryMaxDrawdown: settingsForm.dcaReentryMaxDrawdown,
+        dcaReentryMinProfit: settingsForm.dcaReentryMinProfit / 100,
+        dcaReentryMaxDrawdown: settingsForm.dcaReentryMaxDrawdown / 100,
         leverage: settingsForm.leverage,
       }
       console.log("[Bot Settings] Sending payload:", payload)
@@ -2136,6 +2143,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                       bot={b}
                       isSelected={isSelected}
                       viewMode={viewMode}
+                      statsOverride={isSelected ? stats : null}
                       onSelect={() => setSelectedId(b.id)}
                       archived={Boolean(archivedBots[b.id])}
                       onToggleArchived={toggleArchived}
@@ -2636,7 +2644,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                           minTickGap={28}
                         />
                         <YAxis
-                          tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                          tickFormatter={(value) => fmtUsd(Number(value))}
                           tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
                           tickLine={false}
                           axisLine={false}
@@ -2686,10 +2694,10 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                   <div className="mt-3 flex items-center justify-between px-1">
                     <div className="flex flex-wrap gap-2">
                       <span className="rounded-md bg-[#4F7BFF] px-2 py-1 text-[11px] font-semibold text-white">
-                        {filteredBalanceChartData.length > 0 ? fmtUsd(filteredBalanceChartData[filteredBalanceChartData.length - 1].profit) : "$0.00"} Profit
+                        {filteredBalanceChartData.length > 0 ? fmtUsd(filteredBalanceChartData[filteredBalanceChartData.length - 1].profit) : fmtUsd(0)} Profit
                       </span>
                       <span className="rounded-md bg-[#FF5A67] px-2 py-1 text-[11px] font-semibold text-white">
-                        {filteredBalanceChartData.length > 0 ? fmtUsd(filteredBalanceChartData[filteredBalanceChartData.length - 1].profit + unrealizedPnl) : "$0.00"} Projected profit (incl. unrealized)
+                        {filteredBalanceChartData.length > 0 ? fmtUsd(filteredBalanceChartData[filteredBalanceChartData.length - 1].profit + unrealizedPnl) : fmtUsd(0)} Projected profit (incl. unrealized)
                       </span>
                       <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-semibold text-foreground">
                         {filteredBalanceChartData.length} Orders
@@ -2923,7 +2931,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                             <th className="min-w-[150px] pb-2 pr-4">ID</th>
                             <th className="pb-2 pr-4">Pair</th>
                             <th className="pb-2 pr-4">Amount</th>
-                            <th className="pb-2 pr-4">Stake amount</th>
+                            <th className="pb-2 pr-4">Stake amount ({displayCurrency})</th>
                             <th className="pb-2 pr-4">Open rate</th>
                             <th className="pb-2 pr-4">Current rate</th>
                             <th className="min-w-[150px] pb-2 pr-4">Current profit %</th>
@@ -2963,7 +2971,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                             <th className="min-w-[150px] pb-2 pr-4">ID</th>
                             <th className="pb-2 pr-4">Pair</th>
                             <th className="pb-2 pr-4">Amount</th>
-                            <th className="pb-2 pr-4">Total stake amount</th>
+                            <th className="pb-2 pr-4">Total stake amount ({displayCurrency})</th>
                             <th className="pb-2 pr-4">Open rate</th>
                             <th className="pb-2 pr-4">Close rate</th>
                             <th className="min-w-[150px] pb-2 pr-4">Profit %</th>
@@ -3000,7 +3008,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                           <tr className="text-left text-xs text-muted-foreground">
                             <th className="pb-2 pr-4">Pair</th>
                             <th className="pb-2 pr-4">Profit %</th>
-                            <th className="pb-2 pr-4">Profit USDT</th>
+                            <th className="pb-2 pr-4">Profit ({displayCurrency})</th>
                             <th className="pb-2">Count</th>
                           </tr>
                         </thead>
@@ -3230,21 +3238,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
 
                     <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
                       <p className="mb-3 text-xs font-medium text-foreground">Entry Timeframes</p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
-                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
-                          <span>5m</span>
-                          <Switch
-                            checked={settingsForm.entry5mEnabled}
-                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry5mEnabled: checked }))}
-                          />
-                        </label>
-                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
-                          <span>15m</span>
-                          <Switch
-                            checked={settingsForm.entry15mEnabled}
-                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry15mEnabled: checked }))}
-                          />
-                        </label>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
                           <span>30m</span>
                           <Switch
@@ -3278,37 +3272,13 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                         />
                       </div>
 
-                      {settingsForm.entry5mEnabled && (
-                        <div className="mb-4 rounded-lg border border-border p-3">
-                          <p className="mb-2 text-xs font-semibold text-foreground">5m</p>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg5mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg5mEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg5mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg5mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg5mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg5mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg5mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg5mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg5mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg5mExitBuffer: Number(event.target.value || 0) }))} /></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {settingsForm.entry15mEnabled && (
-                        <div className="mb-4 rounded-lg border border-border p-3">
-                          <p className="mb-2 text-xs font-semibold text-foreground">15m</p>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg15mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg15mEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg15mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg15mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg15mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg15mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg15mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg15mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg15mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg15mExitBuffer: Number(event.target.value || 0) }))} /></div>
-                          </div>
-                        </div>
-                      )}
-
                       {settingsForm.entry30mEnabled && (
                         <div className="mb-4 rounded-lg border border-border p-3">
                           <p className="mb-2 text-xs font-semibold text-foreground">30m</p>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg30mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg30mEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMax: Number(event.target.value || 0) }))} /></div>
                             <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg30mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mExitBuffer: Number(event.target.value || 0) }))} /></div>
                           </div>
                         </div>
@@ -3319,8 +3289,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                           <p className="mb-2 text-xs font-semibold text-foreground">1h</p>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg1hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg1hEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMax: Number(event.target.value || 0) }))} /></div>
                             <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg1hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hExitBuffer: Number(event.target.value || 0) }))} /></div>
                           </div>
                         </div>
@@ -3331,25 +3301,25 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                           <p className="mb-2 text-xs font-semibold text-foreground">4h</p>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg4hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg4hEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.chg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max)</span><Input type="number" step="0.1" value={settingsForm.dcaChg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMax: Number(event.target.value || 0) }))} /></div>
+                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMax: Number(event.target.value || 0) }))} /></div>
                             <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg4hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hExitBuffer: Number(event.target.value || 0) }))} /></div>
                           </div>
                         </div>
                       )}
 
-                      {!settingsForm.entry5mEnabled && !settingsForm.entry15mEnabled && !settingsForm.entry30mEnabled && !settingsForm.entry1hEnabled && !settingsForm.entry4hEnabled && (
+                      {!settingsForm.entry30mEnabled && !settingsForm.entry1hEnabled && !settingsForm.entry4hEnabled && (
                         <p className="text-xs text-muted-foreground">Enable at least one Entry Timeframe to configure change-filter values.</p>
                       )}
 
-                      <p className="mt-4 mb-2 text-[11px] text-muted-foreground">DCA re-entry window</p>
+                      <p className="mt-4 mb-2 text-[11px] text-muted-foreground">DCA re-entry window (%)</p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
-                          <label className="text-[11px] text-muted-foreground">Min Profit</label>
+                          <label className="text-[11px] text-muted-foreground">Min Profit %</label>
                           <Input type="number" step="0.01" value={settingsForm.dcaReentryMinProfit} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMinProfit: Number(event.target.value || 0) }))} />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[11px] text-muted-foreground">Max Drawdown</label>
+                          <label className="text-[11px] text-muted-foreground">Max Drawdown %</label>
                           <Input type="number" step="0.01" value={settingsForm.dcaReentryMaxDrawdown} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMaxDrawdown: Number(event.target.value || 0) }))} />
                         </div>
                       </div>
@@ -3508,7 +3478,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                   }
                 }}
               >
-                <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+                <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto pb-6">
                   <DialogHeader>
                     <DialogTitle>Order Details</DialogTitle>
                     <DialogDescription>
@@ -3520,7 +3490,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                     (() => {
                       const detail = (activeTradeDetail ?? activeTrade.trade) as FtTradeDetail
                       const entryTag = detail.entry_tag ?? detail.enter_tag ?? `${detail.is_short ? "Short" : "Long"}`
-                      const stakeLabel = `${fmt(detail.stake_amount ?? 0, 3)} ${stats.config.stake_currency ?? "USDT"}${typeof detail.leverage === "number" && Number.isFinite(detail.leverage) ? ` (${fmt(detail.leverage, 0)}x)` : ""}`
+                      const stakeLabel = `${fmtUsd(detail.stake_amount ?? 0)}${typeof detail.leverage === "number" && Number.isFinite(detail.leverage) ? ` (${fmt(detail.leverage, 0)}x)` : ""}`
                       const rawPct = typeof detail.close_profit_pct === "number" ? detail.close_profit_pct : (detail.profit_pct ?? 0)
                       const normalizedRawPct = Math.abs(rawPct) <= 1 ? rawPct * 100 : rawPct
                       const computedPct = typeof detail.stake_amount === "number" && detail.stake_amount !== 0
@@ -3546,12 +3516,10 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
 
                       return (
                         <div className="space-y-4 text-sm">
-                          {activeTradeDetailLoading && (
-                            <div className="rounded-md border border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-                              Loading extended trade details...
-                            </div>
-                          )}
-
+                          {activeTradeDetailLoading ? (
+                            <OrderDetailsSkeleton />
+                          ) : (
+                            <>
                           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                             <div className="space-y-2 rounded-md border border-border bg-muted/10 p-3">
                               <p className="border-b border-border pb-1 text-base font-semibold">General</p>
@@ -3565,7 +3533,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Close Rate</span><span className="font-medium">{typeof detail.close_rate === "number" ? detail.close_rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }) : "-"}</span></div>
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Close date</span><span className="font-medium">{fmtDateTime(detail.close_date)}</span></div>
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Order Duration</span><span className="rounded bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">{orderDuration || "-"}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Close Profit</span><span className={cn("font-semibold", closeAbs >= 0 ? "text-emerald-400" : "text-red-400")}>{`${closePct >= 0 ? "+" : ""}${closePct.toFixed(2)}% (${fmt(closeAbs, 3)})`}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Close Profit</span><span className={cn("font-semibold", closeAbs >= 0 ? "text-emerald-400" : "text-red-400")}>{`${closePct >= 0 ? "+" : ""}${closePct.toFixed(2)}% (${fmtUsd(closeAbs)})`}</span></div>
                             </div>
 
                             <div className="space-y-4">
@@ -3573,14 +3541,14 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                                 <p className="border-b border-border pb-1 text-base font-semibold">Details</p>
                                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Min Rate</span><span className="font-medium">{typeof detail.min_rate === "number" ? detail.min_rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }) : "-"}</span></div>
                                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Max Rate</span><span className="font-medium">{typeof detail.max_rate === "number" ? detail.max_rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 }) : "-"}</span></div>
-                                <div className="flex items-center justify-between"><span className="text-muted-foreground">Open-Fees</span><span className="font-medium">{typeof detail.fee_open_cost === "number" ? `${fmt(detail.fee_open_cost, 6)} ${stats.config.stake_currency ?? "USDT"} (${fmtPctNumber(detail.fee_open, 3)})` : "-"}</span></div>
-                                <div className="flex items-center justify-between"><span className="text-muted-foreground">Fees close</span><span className="font-medium">{typeof detail.fee_close_cost === "number" ? `${fmt(detail.fee_close_cost, 6)} ${stats.config.stake_currency ?? "USDT"} (${fmtPctNumber(detail.fee_close, 3)})` : "-"}</span></div>
+                                <div className="flex items-center justify-between"><span className="text-muted-foreground">Open-Fees</span><span className="font-medium">{typeof detail.fee_open_cost === "number" ? `${fmtUsd(detail.fee_open_cost)} (${fmtPctNumber(detail.fee_open, 3)})` : "-"}</span></div>
+                                <div className="flex items-center justify-between"><span className="text-muted-foreground">Fees close</span><span className="font-medium">{typeof detail.fee_close_cost === "number" ? `${fmtUsd(detail.fee_close_cost)} (${fmtPctNumber(detail.fee_close, 3)})` : "-"}</span></div>
                               </div>
 
                               <div className="space-y-2 rounded-md border border-border bg-muted/10 p-3">
                                 <p className="border-b border-border pb-1 text-base font-semibold">Stoploss</p>
                                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Stoploss</span><span className="font-medium">{typeof detail.stop_loss_pct === "number" || typeof detail.stop_loss_abs === "number" ? `${fmtPctNumber(detail.stop_loss_pct, 3)} | ${typeof detail.stop_loss_abs === "number" ? fmt(detail.stop_loss_abs, 5) : "-"}` : "-"}</span></div>
-                                <div className="flex items-center justify-between"><span className="text-muted-foreground">At risk</span><span className="font-medium">{typeof atRiskValue === "number" ? `${fmt(atRiskValue, 3)} ${stats.config.stake_currency ?? "USDT"}` : "-"}</span></div>
+                                <div className="flex items-center justify-between"><span className="text-muted-foreground">At risk</span><span className="font-medium">{typeof atRiskValue === "number" ? fmtUsd(atRiskValue) : "-"}</span></div>
                                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Initial Stoploss</span><span className="font-medium">{typeof detail.initial_stop_loss_pct === "number" || typeof detail.initial_stop_loss_abs === "number" ? `${fmtPctNumber(detail.initial_stop_loss_pct, 3)} | ${typeof detail.initial_stop_loss_abs === "number" ? fmt(detail.initial_stop_loss_abs, 5) : "-"}` : "-"}</span></div>
                               </div>
 
@@ -3634,6 +3602,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                               <p className="text-xs text-muted-foreground">No order execution details returned by API.</p>
                             )}
                           </div>
+                            </>
+                          )}
                         </div>
                       )
                     })()

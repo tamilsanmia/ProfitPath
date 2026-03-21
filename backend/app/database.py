@@ -879,6 +879,23 @@ def get_user_purchased_bot_account(user_id: int, bot_id: str) -> dict[str, Any] 
     return dict(row) if row else None
 
 
+def list_user_purchased_bot_accounts(user_id: int) -> list[dict[str, Any]]:
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT *
+                FROM bot_accounts
+                WHERE owner_user_id = %s
+                  AND purchased = TRUE
+                ORDER BY created_at DESC, bot_id DESC
+                """,
+                (user_id,),
+            )
+            rows = cur.fetchall()
+    return [dict(row) for row in rows]
+
+
 def delete_user_purchased_bot_account(user_id: int, bot_id: str) -> bool:
     with get_pg_connection() as conn:
         with conn.cursor() as cur:
@@ -918,6 +935,57 @@ def update_bot_setup_state(user_id: int, bot_id: str, setup_patch: dict[str, Any
             row = cur.fetchone()
         conn.commit()
     return dict(row) if row else None
+
+
+def delete_bot_setup_metadata_keys(user_id: int, bot_id: str, keys: list[str]) -> bool:
+    normalized_keys = [str(key).strip() for key in keys if str(key).strip()]
+    if not normalized_keys:
+        return False
+
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE bot_accounts
+                SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) - %s::text[],
+                    updated_at = NOW()
+                WHERE bot_id = %s
+                  AND owner_user_id = %s
+                  AND purchased = TRUE
+                  AND COALESCE(metadata_json, '{}'::jsonb) ?| %s::text[]
+                RETURNING bot_id
+                """,
+                (normalized_keys, bot_id, user_id, normalized_keys),
+            )
+            row = cur.fetchone()
+        conn.commit()
+
+    return row is not None
+
+
+def delete_user_purchased_bot_metadata_keys(user_id: int, keys: list[str]) -> list[str]:
+    normalized_keys = [str(key).strip() for key in keys if str(key).strip()]
+    if not normalized_keys:
+        return []
+
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE bot_accounts
+                SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) - %s::text[],
+                    updated_at = NOW()
+                WHERE owner_user_id = %s
+                  AND purchased = TRUE
+                  AND COALESCE(metadata_json, '{}'::jsonb) ?| %s::text[]
+                RETURNING bot_id
+                """,
+                (normalized_keys, user_id, normalized_keys),
+            )
+            rows = cur.fetchall()
+        conn.commit()
+
+    return [str(row["bot_id"]) for row in rows]
 
 
 def upsert_bot_runtime_data(

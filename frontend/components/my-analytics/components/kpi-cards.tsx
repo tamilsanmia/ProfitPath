@@ -1,5 +1,6 @@
 import { BarChart3, CreditCard, DollarSign, LineChart } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyTextFromUsd } from "@/lib/currency-runtime"
 import type { KpiCardProps } from "../types"
 
 const KpiCard = ({ title, value, change, icon, isPositive = true }: KpiCardProps) => (
@@ -9,7 +10,7 @@ const KpiCard = ({ title, value, change, icon, isPositive = true }: KpiCardProps
       {icon}
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-2xl font-bold">{formatCurrencyTextFromUsd(value)}</div>
       <p className={`text-xs ${isPositive ? "text-green-500" : "text-muted-foreground"}`}>{change}</p>
     </CardContent>
   </Card>

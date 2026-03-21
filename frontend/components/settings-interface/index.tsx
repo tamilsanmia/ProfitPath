@@ -1,8 +1,10 @@
 "use client";
 
 import type React from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { AppearanceTab } from "./components/appearance/appearance-tab";
+import { AdminSiteTab } from "./components/admin/admin-site-tab";
 import { ConnectionsTab } from "./components/connections/connections-tab";
 import { ProfileTab } from "./components/profile/profile-tab";
 import { SecurityTab } from "./components/security/security-tab";
@@ -11,7 +13,11 @@ import { SaveButton } from "./components/shared/save-button";
 import { useSettings } from "@/components/settings-interface/hooks/use-settings";
 import { createSettingsTranslator } from "@/components/settings-interface/i18n";
 
-export const SettingsInterface: React.FC = () => {
+interface SettingsInterfaceProps {
+  initialTab?: string;
+}
+
+export const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ initialTab }) => {
   const {
     settings,
     isLoading,
@@ -19,15 +25,24 @@ export const SettingsInterface: React.FC = () => {
     updateProfile,
     updateSecurity,
     updateAppearance,
+    updateAdminSite,
     persistConnections,
     updateSessions,
     updateLoginHistory,
     setActiveTab,
     saveSettings,
     resetSettings,
+    isAdmin,
   } = useSettings();
 
   const t = createSettingsTranslator(settings.appearance.language);
+
+  useEffect(() => {
+    if (!initialTab) {
+      return;
+    }
+    setActiveTab(initialTab);
+  }, [initialTab, setActiveTab]);
 
   const handleSave = async () => {
     const result = await saveSettings();
@@ -74,6 +89,20 @@ export const SettingsInterface: React.FC = () => {
           />
         );
 
+      case "admin":
+        if (!isAdmin) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-medium">Admin Access Required</h3>
+                <p className="text-muted-foreground">This section is only available for the configured admin user.</p>
+              </div>
+            </div>
+          );
+        }
+
+        return <AdminSiteTab adminSite={settings.adminSite} onAdminSiteChange={updateAdminSite} />;
+
       default:
         return (
           <div className="flex items-center justify-center h-64">
@@ -104,6 +133,7 @@ export const SettingsInterface: React.FC = () => {
         onTabChange={setActiveTab}
         hasUnsavedChanges={settings.hasUnsavedChanges}
         language={settings.appearance.language}
+        isAdmin={isAdmin}
       />
 
       <div data-name="settings-main-content" className="flex-1 flex flex-col">

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyTextFromUsd } from "@/lib/currency-runtime"
 import type { TopBot } from "../types"
 
 interface TopBotsProps {
@@ -28,7 +29,7 @@ export function TopBots({ bots }: TopBotsProps) {
                 <div className="font-medium">{bot.name}</div>
                 <div className="text-xs text-muted-foreground">{bot.type}</div>
               </div>
-              <div className="text-green-500">{bot.profit}</div>
+              <div className="text-green-500">{formatCurrencyTextFromUsd(bot.profit)}</div>
               <div>{bot.winRate}</div>
             </div>
           ))}

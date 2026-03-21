@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import smtplib
+import logging
 import os
 import json
 import base64
@@ -31,7 +32,9 @@ from .database import (
     create_purchased_bot_account,
     create_auth_session,
     create_referrals,
+    delete_bot_setup_metadata_keys,
     delete_user_purchased_bot_account,
+    delete_user_purchased_bot_metadata_keys,
     create_password_reset_token,
     create_user,
     get_auth_session_by_token_hash,
@@ -40,6 +43,7 @@ from .database import (
     list_bot_accounts,
     list_auth_sessions,
     list_bot_setup_events,
+    list_user_purchased_bot_accounts,
     list_login_history,
     get_user_settings,
     get_user_purchased_bot_account,
@@ -63,7 +67,7 @@ from .database import (
 )
 from .docker_client import get_docker_client, safe_docker_ping
 from .freqtrade import router as freqtrade_router
-from .mailer import send_reset_email
+from .mailer import send_reset_email, send_test_email
 from .security import hash_password, verify_password
 from .settings import settings
 
@@ -71,6 +75,8 @@ app = FastAPI(title=settings.app_name)
 app.include_router(freqtrade_router)
 os.makedirs(settings.profile_pictures_dir, exist_ok=True)
 app.mount("/media/profile-pictures", StaticFiles(directory=settings.profile_pictures_dir), name="profile-pictures")
+
+logger = logging.getLogger("profitpath.api")
 
 
 class UserCreatePayload(BaseModel):
@@ -209,6 +215,8 @@ def _normalize_connection_permissions(raw_permissions: object) -> list[str]:
 
 
 def _sanitize_connections_for_storage(settings_payload: dict) -> dict:
+    settings_payload = _strip_deprecated_admin_fields(settings_payload)
+    settings_payload = _normalize_admin_company_information(settings_payload)
     connections = settings_payload.get("connections")
     if not isinstance(connections, list):
         return settings_payload
@@ -256,6 +264,8 @@ def _sanitize_connections_for_storage(settings_payload: dict) -> dict:
 
 
 def _sanitize_connections_for_response(settings_payload: dict) -> dict:
+    settings_payload = _strip_deprecated_admin_fields(settings_payload)
+    settings_payload = _normalize_admin_company_information(settings_payload)
     connections = settings_payload.get("connections")
     if not isinstance(connections, list):
         return settings_payload
@@ -292,6 +302,118 @@ def _sanitize_connections_for_response(settings_payload: dict) -> dict:
 
     updated = dict(settings_payload)
     updated["connections"] = response_connections
+    return updated
+
+
+def _strip_deprecated_admin_fields(settings_payload: dict) -> dict:
+    if not isinstance(settings_payload, dict):
+        return settings_payload
+
+    updated = dict(settings_payload)
+
+    admin_portal = updated.get("adminPortal")
+    if isinstance(admin_portal, dict):
+        next_admin_portal = dict(admin_portal)
+        general = next_admin_portal.get("general")
+        if isinstance(general, dict):
+            next_general = dict(general)
+            next_general.pop("maintenanceMode", None)
+            next_general.pop("statusPageEnabled", None)
+            next_admin_portal["general"] = next_general
+        updated["adminPortal"] = next_admin_portal
+
+    admin_site = updated.get("adminSite")
+    if isinstance(admin_site, dict):
+        next_admin_site = dict(admin_site)
+        next_admin_site.pop("maintenanceMode", None)
+        updated["adminSite"] = next_admin_site
+
+    return updated
+
+
+def _cleanup_deprecated_admin_settings_for_user(user_id: int) -> dict[str, Any]:
+    current_settings = get_user_settings(user_id) or {}
+    cleaned_settings = _strip_deprecated_admin_fields(current_settings)
+    changed = cleaned_settings != current_settings
+
+    if changed:
+        upsert_user_settings(user_id, cleaned_settings)
+
+    return {
+        "changed": changed,
+        "cleaned_settings": cleaned_settings,
+    }
+
+
+def _clean_settings_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _normalize_admin_company_information(settings_payload: dict) -> dict:
+    if not isinstance(settings_payload, dict):
+        return settings_payload
+
+    updated = dict(settings_payload)
+
+    admin_portal_raw = updated.get("adminPortal")
+    admin_portal = dict(admin_portal_raw) if isinstance(admin_portal_raw, dict) else {}
+
+    general_raw = admin_portal.get("general")
+    general = dict(general_raw) if isinstance(general_raw, dict) else {}
+
+    admin_site_raw = updated.get("adminSite")
+    admin_site = dict(admin_site_raw) if isinstance(admin_site_raw, dict) else {}
+
+    company_info_raw = admin_portal.get("companyInformation")
+    company_info = dict(company_info_raw) if isinstance(company_info_raw, dict) else {}
+
+    normalized_company_information = {
+        "companyName": _clean_settings_text(company_info.get("companyName"))
+        or _clean_settings_text(admin_site.get("companyName"))
+        or _clean_settings_text(general.get("companyName"))
+        or "DefibotX",
+        "address": _clean_settings_text(company_info.get("address"))
+        or _clean_settings_text(admin_site.get("address"))
+        or "",
+        "city": _clean_settings_text(company_info.get("city"))
+        or _clean_settings_text(admin_site.get("city"))
+        or "",
+        "state": _clean_settings_text(company_info.get("state"))
+        or _clean_settings_text(admin_site.get("state"))
+        or "",
+        "countryCode": _clean_settings_text(company_info.get("countryCode"))
+        or _clean_settings_text(admin_site.get("countryCode"))
+        or "",
+        "zipCode": _clean_settings_text(company_info.get("zipCode"))
+        or _clean_settings_text(admin_site.get("zipCode"))
+        or "",
+        "phone": _clean_settings_text(company_info.get("phone"))
+        or _clean_settings_text(admin_site.get("phone"))
+        or _clean_settings_text(admin_site.get("supportPhone"))
+        or "",
+        "vatNumber": _clean_settings_text(company_info.get("vatNumber"))
+        or _clean_settings_text(admin_site.get("vatNumber"))
+        or _clean_settings_text(admin_site.get("taxId"))
+        or "",
+        "companyInfoFormat": _clean_settings_text(company_info.get("companyInfoFormat"))
+        or _clean_settings_text(admin_site.get("companyInfoFormat"))
+        or "{company_name}\n    {address}\n    {city} {state}\n    {country_code} {zip_code}\n    {vat_number_with_label}",
+    }
+
+    admin_portal["companyInformation"] = normalized_company_information
+    updated["adminPortal"] = admin_portal
+
+    admin_site["companyName"] = normalized_company_information["companyName"]
+    admin_site["address"] = normalized_company_information["address"]
+    admin_site["city"] = normalized_company_information["city"]
+    admin_site["state"] = normalized_company_information["state"]
+    admin_site["countryCode"] = normalized_company_information["countryCode"]
+    admin_site["zipCode"] = normalized_company_information["zipCode"]
+    admin_site["phone"] = normalized_company_information["phone"]
+    admin_site["vatNumber"] = normalized_company_information["vatNumber"]
+    admin_site["companyInfoFormat"] = normalized_company_information["companyInfoFormat"]
+    updated["adminSite"] = admin_site
+
     return updated
 
 
@@ -431,39 +553,25 @@ class UpdateBotSetupSettingsPayload(BaseModel):
     max_open_order: int
     stoploss_pct: float
     dca_stoploss_pct: float
-    entry_5m_enabled: bool = True
-    entry_15m_enabled: bool = False
     entry_30m_enabled: bool = False
     entry_1h_enabled: bool = False
     entry_4h_enabled: bool = False
     use_chg_filter: bool = True
-    chg_5m_enabled: bool = True
-    chg_15m_enabled: bool = True
     chg_30m_enabled: bool = True
     chg_1h_enabled: bool = True
     chg_4h_enabled: bool = True
-    chg_5m_min: float = -10.0
-    chg_5m_max: float = 10.0
-    chg_15m_min: float = -10.0
-    chg_15m_max: float = 10.0
     chg_30m_min: float = -10.0
     chg_30m_max: float = 10.0
     chg_1h_min: float = -10.0
     chg_1h_max: float = 10.0
     chg_4h_min: float = -10.0
     chg_4h_max: float = 10.0
-    dca_chg_5m_min: float = -5.0
-    dca_chg_5m_max: float = 5.0
-    dca_chg_15m_min: float = -10.0
-    dca_chg_15m_max: float = 10.0
     dca_chg_30m_min: float = -10.0
     dca_chg_30m_max: float = 10.0
     dca_chg_1h_min: float = -10.0
     dca_chg_1h_max: float = 10.0
     dca_chg_4h_min: float = -10.0
     dca_chg_4h_max: float = 10.0
-    chg_5m_exit_buffer: float = 2.0
-    chg_15m_exit_buffer: float = 2.0
     chg_30m_exit_buffer: float = 2.0
     chg_1h_exit_buffer: float = 2.0
     chg_4h_exit_buffer: float = 2.0
@@ -475,6 +583,40 @@ class UpdateBotSetupSettingsPayload(BaseModel):
 class EmailSessionPayload(BaseModel):
     email: EmailStr
     session_token: str
+
+
+class TestEmailPayload(BaseModel):
+    email: EmailStr | None = None
+    toEmail: EmailStr
+    smtpConfig: dict[str, Any] | None = None
+
+
+def _build_smtp_config_from_admin_settings(user_id: int) -> dict[str, Any] | None:
+    settings_payload = get_user_settings(user_id) or {}
+    admin_portal = settings_payload.get("adminPortal") if isinstance(settings_payload.get("adminPortal"), dict) else {}
+    email_settings = admin_portal.get("email") if isinstance(admin_portal.get("email"), dict) else {}
+
+    host = str(email_settings.get("smtpHost") or "").strip()
+    from_email = str(email_settings.get("fromEmail") or "").strip()
+    if not host or not from_email:
+        return None
+
+    port_raw = email_settings.get("smtpPort")
+    try:
+        port = int(port_raw)
+    except (TypeError, ValueError):
+        port = 587
+
+    return {
+        "host": host,
+        "port": port,
+        "encryption": str(email_settings.get("smtpEncryption") or "TLS").strip() or "TLS",
+        "username": str(email_settings.get("smtpUsername") or "").strip(),
+        "password": str(email_settings.get("smtpPassword") or "").strip(),
+        "fromEmail": from_email,
+        "fromName": str(email_settings.get("fromName") or "").strip(),
+        "charset": str(email_settings.get("emailCharset") or "UTF-8").strip() or "UTF-8",
+    }
 
 
 def _setup_metadata(bot_row: dict[str, Any] | None) -> dict[str, Any]:
@@ -703,6 +845,32 @@ def _normalize_bounded_float(value: Any, *, default_value: float, min_value: flo
     return max(min_value, min(max_value, parsed))
 
 
+LEGACY_STRATEGY_METADATA_KEYS = [
+    "entry_5m_enabled",
+    "entry_15m_enabled",
+    "chg_5m_enabled",
+    "chg_15m_enabled",
+    "chg_5m_min",
+    "chg_5m_max",
+    "chg_15m_min",
+    "chg_15m_max",
+    "dca_chg_5m_min",
+    "dca_chg_5m_max",
+    "dca_chg_15m_min",
+    "dca_chg_15m_max",
+    "chg_5m_exit_buffer",
+    "chg_15m_exit_buffer",
+]
+
+
+def _cleanup_legacy_strategy_settings_for_bot(user_id: int, bot_id: str) -> bool:
+    return delete_bot_setup_metadata_keys(user_id, bot_id, LEGACY_STRATEGY_METADATA_KEYS)
+
+
+def _cleanup_legacy_strategy_settings_for_user(user_id: int) -> list[str]:
+    return delete_user_purchased_bot_metadata_keys(user_id, LEGACY_STRATEGY_METADATA_KEYS)
+
+
 def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     metadata = _setup_metadata(bot_row)
 
@@ -744,10 +912,6 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
             return raw.strip().lower() in {"true", "1", "yes", "on", "enable", "enabled"}
         return bool(raw)
 
-    chg_5m_min = _normalize_bounded_float(metadata.get("chg_5m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
-    chg_5m_max = _normalize_bounded_float(metadata.get("chg_5m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
-    chg_15m_min = _normalize_bounded_float(metadata.get("chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
-    chg_15m_max = _normalize_bounded_float(metadata.get("chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     chg_30m_min = _normalize_bounded_float(metadata.get("chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     chg_30m_max = _normalize_bounded_float(metadata.get("chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     chg_1h_min = _normalize_bounded_float(metadata.get("chg_1h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
@@ -755,10 +919,6 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     chg_4h_min = _normalize_bounded_float(metadata.get("chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     chg_4h_max = _normalize_bounded_float(metadata.get("chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
 
-    dca_chg_5m_min = _normalize_bounded_float(metadata.get("dca_chg_5m_min"), default_value=-5.0, min_value=-100.0, max_value=100.0)
-    dca_chg_5m_max = _normalize_bounded_float(metadata.get("dca_chg_5m_max"), default_value=5.0, min_value=-100.0, max_value=100.0)
-    dca_chg_15m_min = _normalize_bounded_float(metadata.get("dca_chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
-    dca_chg_15m_max = _normalize_bounded_float(metadata.get("dca_chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     dca_chg_30m_min = _normalize_bounded_float(metadata.get("dca_chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     dca_chg_30m_max = _normalize_bounded_float(metadata.get("dca_chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     dca_chg_1h_min = _normalize_bounded_float(metadata.get("dca_chg_1h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
@@ -766,8 +926,6 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     dca_chg_4h_min = _normalize_bounded_float(metadata.get("dca_chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     dca_chg_4h_max = _normalize_bounded_float(metadata.get("dca_chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
 
-    chg_5m_exit_buffer = _normalize_bounded_float(metadata.get("chg_5m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
-    chg_15m_exit_buffer = _normalize_bounded_float(metadata.get("chg_15m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_30m_exit_buffer = _normalize_bounded_float(metadata.get("chg_30m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_1h_exit_buffer = _normalize_bounded_float(metadata.get("chg_1h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_4h_exit_buffer = _normalize_bounded_float(metadata.get("chg_4h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
@@ -783,39 +941,25 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
         "max_open_order": max_open_order,
         "stoploss_pct": stoploss_pct,
         "dca_stoploss_pct": dca_stoploss_pct,
-        "entry_5m_enabled": _read_bool("entry_5m_enabled", True),
-        "entry_15m_enabled": _read_bool("entry_15m_enabled", False),
         "entry_30m_enabled": _read_bool("entry_30m_enabled", False),
         "entry_1h_enabled": _read_bool("entry_1h_enabled", False),
         "entry_4h_enabled": _read_bool("entry_4h_enabled", False),
         "use_chg_filter": _read_bool("use_chg_filter", True),
-        "chg_5m_enabled": _read_bool("chg_5m_enabled", True),
-        "chg_15m_enabled": _read_bool("chg_15m_enabled", True),
         "chg_30m_enabled": _read_bool("chg_30m_enabled", True),
         "chg_1h_enabled": _read_bool("chg_1h_enabled", True),
         "chg_4h_enabled": _read_bool("chg_4h_enabled", True),
-        "chg_5m_min": chg_5m_min,
-        "chg_5m_max": chg_5m_max,
-        "chg_15m_min": chg_15m_min,
-        "chg_15m_max": chg_15m_max,
         "chg_30m_min": chg_30m_min,
         "chg_30m_max": chg_30m_max,
         "chg_1h_min": chg_1h_min,
         "chg_1h_max": chg_1h_max,
         "chg_4h_min": chg_4h_min,
         "chg_4h_max": chg_4h_max,
-        "dca_chg_5m_min": dca_chg_5m_min,
-        "dca_chg_5m_max": dca_chg_5m_max,
-        "dca_chg_15m_min": dca_chg_15m_min,
-        "dca_chg_15m_max": dca_chg_15m_max,
         "dca_chg_30m_min": dca_chg_30m_min,
         "dca_chg_30m_max": dca_chg_30m_max,
         "dca_chg_1h_min": dca_chg_1h_min,
         "dca_chg_1h_max": dca_chg_1h_max,
         "dca_chg_4h_min": dca_chg_4h_min,
         "dca_chg_4h_max": dca_chg_4h_max,
-        "chg_5m_exit_buffer": chg_5m_exit_buffer,
-        "chg_15m_exit_buffer": chg_15m_exit_buffer,
         "chg_30m_exit_buffer": chg_30m_exit_buffer,
         "chg_1h_exit_buffer": chg_1h_exit_buffer,
         "chg_4h_exit_buffer": chg_4h_exit_buffer,
@@ -1505,39 +1649,25 @@ def _apply_strategy_runtime_settings(
     stoploss_value: float,
     dca_stoploss_value: float,
     leverage_value: float,
-    entry_5m_enabled: bool,
-    entry_15m_enabled: bool,
     entry_30m_enabled: bool,
     entry_1h_enabled: bool,
     entry_4h_enabled: bool,
     use_chg_filter: bool,
-    chg_5m_enabled: bool,
-    chg_15m_enabled: bool,
     chg_30m_enabled: bool,
     chg_1h_enabled: bool,
     chg_4h_enabled: bool,
-    chg_5m_min: float,
-    chg_5m_max: float,
-    chg_15m_min: float,
-    chg_15m_max: float,
     chg_30m_min: float,
     chg_30m_max: float,
     chg_1h_min: float,
     chg_1h_max: float,
     chg_4h_min: float,
     chg_4h_max: float,
-    dca_chg_5m_min: float,
-    dca_chg_5m_max: float,
-    dca_chg_15m_min: float,
-    dca_chg_15m_max: float,
     dca_chg_30m_min: float,
     dca_chg_30m_max: float,
     dca_chg_1h_min: float,
     dca_chg_1h_max: float,
     dca_chg_4h_min: float,
     dca_chg_4h_max: float,
-    chg_5m_exit_buffer: float,
-    chg_15m_exit_buffer: float,
     chg_30m_exit_buffer: float,
     chg_1h_exit_buffer: float,
     chg_4h_exit_buffer: float,
@@ -1552,22 +1682,14 @@ def _apply_strategy_runtime_settings(
     updated = _upsert_strategy_class_attr(updated, "stoploss", _fmt(stoploss_value))
     updated = _upsert_strategy_class_attr(updated, "dca_stoploss", _fmt(dca_stoploss_value))
     updated = _upsert_strategy_class_attr(updated, "leverage_value", _fmt(leverage_value))
-    updated = _upsert_strategy_class_attr(updated, "entry_5m_enabled", "True" if entry_5m_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "entry_15m_enabled", "True" if entry_15m_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "entry_30m_enabled", "True" if entry_30m_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "entry_1h_enabled", "True" if entry_1h_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "entry_4h_enabled", "True" if entry_4h_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "use_chg_filter", "True" if use_chg_filter else "False")
-    updated = _upsert_strategy_class_attr(updated, "chg_5m_enabled", "True" if chg_5m_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "chg_15m_enabled", "True" if chg_15m_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "chg_30m_enabled", "True" if chg_30m_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "chg_1h_enabled", "True" if chg_1h_enabled else "False")
     updated = _upsert_strategy_class_attr(updated, "chg_4h_enabled", "True" if chg_4h_enabled else "False")
 
-    updated = _upsert_strategy_class_attr(updated, "chg_5m_min", _fmt(chg_5m_min))
-    updated = _upsert_strategy_class_attr(updated, "chg_5m_max", _fmt(chg_5m_max))
-    updated = _upsert_strategy_class_attr(updated, "chg_15m_min", _fmt(chg_15m_min))
-    updated = _upsert_strategy_class_attr(updated, "chg_15m_max", _fmt(chg_15m_max))
     updated = _upsert_strategy_class_attr(updated, "chg_30m_min", _fmt(chg_30m_min))
     updated = _upsert_strategy_class_attr(updated, "chg_30m_max", _fmt(chg_30m_max))
     updated = _upsert_strategy_class_attr(updated, "chg_1h_min", _fmt(chg_1h_min))
@@ -1575,10 +1697,6 @@ def _apply_strategy_runtime_settings(
     updated = _upsert_strategy_class_attr(updated, "chg_4h_min", _fmt(chg_4h_min))
     updated = _upsert_strategy_class_attr(updated, "chg_4h_max", _fmt(chg_4h_max))
 
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_5m_min", _fmt(dca_chg_5m_min))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_5m_max", _fmt(dca_chg_5m_max))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_15m_min", _fmt(dca_chg_15m_min))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_15m_max", _fmt(dca_chg_15m_max))
     updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_min", _fmt(dca_chg_30m_min))
     updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_max", _fmt(dca_chg_30m_max))
     updated = _upsert_strategy_class_attr(updated, "dca_chg_1h_min", _fmt(dca_chg_1h_min))
@@ -1586,8 +1704,6 @@ def _apply_strategy_runtime_settings(
     updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_min", _fmt(dca_chg_4h_min))
     updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_max", _fmt(dca_chg_4h_max))
 
-    updated = _upsert_strategy_class_attr(updated, "chg_5m_exit_buffer", _fmt(chg_5m_exit_buffer))
-    updated = _upsert_strategy_class_attr(updated, "chg_15m_exit_buffer", _fmt(chg_15m_exit_buffer))
     updated = _upsert_strategy_class_attr(updated, "chg_30m_exit_buffer", _fmt(chg_30m_exit_buffer))
     updated = _upsert_strategy_class_attr(updated, "chg_1h_exit_buffer", _fmt(chg_1h_exit_buffer))
     updated = _upsert_strategy_class_attr(updated, "chg_4h_exit_buffer", _fmt(chg_4h_exit_buffer))
@@ -1797,39 +1913,25 @@ def _deploy_freqtrade_bundle(
     stoploss_value: float,
     dca_stoploss_value: float,
     leverage_value: float,
-    entry_5m_enabled: bool,
-    entry_15m_enabled: bool,
     entry_30m_enabled: bool,
     entry_1h_enabled: bool,
     entry_4h_enabled: bool,
     use_chg_filter: bool,
-    chg_5m_enabled: bool,
-    chg_15m_enabled: bool,
     chg_30m_enabled: bool,
     chg_1h_enabled: bool,
     chg_4h_enabled: bool,
-    chg_5m_min: float,
-    chg_5m_max: float,
-    chg_15m_min: float,
-    chg_15m_max: float,
     chg_30m_min: float,
     chg_30m_max: float,
     chg_1h_min: float,
     chg_1h_max: float,
     chg_4h_min: float,
     chg_4h_max: float,
-    dca_chg_5m_min: float,
-    dca_chg_5m_max: float,
-    dca_chg_15m_min: float,
-    dca_chg_15m_max: float,
     dca_chg_30m_min: float,
     dca_chg_30m_max: float,
     dca_chg_1h_min: float,
     dca_chg_1h_max: float,
     dca_chg_4h_min: float,
     dca_chg_4h_max: float,
-    chg_5m_exit_buffer: float,
-    chg_15m_exit_buffer: float,
     chg_30m_exit_buffer: float,
     chg_1h_exit_buffer: float,
     chg_4h_exit_buffer: float,
@@ -1864,39 +1966,25 @@ def _deploy_freqtrade_bundle(
         stoploss_value=stoploss_value,
         dca_stoploss_value=dca_stoploss_value,
         leverage_value=leverage_value,
-        entry_5m_enabled=entry_5m_enabled,
-        entry_15m_enabled=entry_15m_enabled,
         entry_30m_enabled=entry_30m_enabled,
         entry_1h_enabled=entry_1h_enabled,
         entry_4h_enabled=entry_4h_enabled,
         use_chg_filter=use_chg_filter,
-        chg_5m_enabled=chg_5m_enabled,
-        chg_15m_enabled=chg_15m_enabled,
         chg_30m_enabled=chg_30m_enabled,
         chg_1h_enabled=chg_1h_enabled,
         chg_4h_enabled=chg_4h_enabled,
-        chg_5m_min=chg_5m_min,
-        chg_5m_max=chg_5m_max,
-        chg_15m_min=chg_15m_min,
-        chg_15m_max=chg_15m_max,
         chg_30m_min=chg_30m_min,
         chg_30m_max=chg_30m_max,
         chg_1h_min=chg_1h_min,
         chg_1h_max=chg_1h_max,
         chg_4h_min=chg_4h_min,
         chg_4h_max=chg_4h_max,
-        dca_chg_5m_min=dca_chg_5m_min,
-        dca_chg_5m_max=dca_chg_5m_max,
-        dca_chg_15m_min=dca_chg_15m_min,
-        dca_chg_15m_max=dca_chg_15m_max,
         dca_chg_30m_min=dca_chg_30m_min,
         dca_chg_30m_max=dca_chg_30m_max,
         dca_chg_1h_min=dca_chg_1h_min,
         dca_chg_1h_max=dca_chg_1h_max,
         dca_chg_4h_min=dca_chg_4h_min,
         dca_chg_4h_max=dca_chg_4h_max,
-        chg_5m_exit_buffer=chg_5m_exit_buffer,
-        chg_15m_exit_buffer=chg_15m_exit_buffer,
         chg_30m_exit_buffer=chg_30m_exit_buffer,
         chg_1h_exit_buffer=chg_1h_exit_buffer,
         chg_4h_exit_buffer=chg_4h_exit_buffer,
@@ -2526,39 +2614,25 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
                 "max_open_order": max_open_order,
                 "stoploss_pct": -99,
                 "dca_stoploss_pct": -50,
-                "entry_5m_enabled": True,
-                "entry_15m_enabled": False,
                 "entry_30m_enabled": False,
                 "entry_1h_enabled": False,
                 "entry_4h_enabled": False,
                 "use_chg_filter": True,
-                "chg_5m_enabled": True,
-                "chg_15m_enabled": True,
                 "chg_30m_enabled": True,
                 "chg_1h_enabled": True,
                 "chg_4h_enabled": True,
-                "chg_5m_min": -10.0,
-                "chg_5m_max": 10.0,
-                "chg_15m_min": -10.0,
-                "chg_15m_max": 10.0,
                 "chg_30m_min": -10.0,
                 "chg_30m_max": 10.0,
                 "chg_1h_min": -10.0,
                 "chg_1h_max": 10.0,
                 "chg_4h_min": -10.0,
                 "chg_4h_max": 10.0,
-                "dca_chg_5m_min": -5.0,
-                "dca_chg_5m_max": 5.0,
-                "dca_chg_15m_min": -10.0,
-                "dca_chg_15m_max": 10.0,
                 "dca_chg_30m_min": -10.0,
                 "dca_chg_30m_max": 10.0,
                 "dca_chg_1h_min": -10.0,
                 "dca_chg_1h_max": 10.0,
                 "dca_chg_4h_min": -10.0,
                 "dca_chg_4h_max": 10.0,
-                "chg_5m_exit_buffer": 2.0,
-                "chg_15m_exit_buffer": 2.0,
                 "chg_30m_exit_buffer": 2.0,
                 "chg_1h_exit_buffer": 2.0,
                 "chg_4h_exit_buffer": 2.0,
@@ -2964,6 +3038,9 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
     if not bot_row:
         raise HTTPException(status_code=404, detail="Purchased bot not found for this user")
 
+    _cleanup_legacy_strategy_settings_for_bot(user["id"], bot_id)
+    bot_row = get_user_purchased_bot_account(user["id"], bot_id) or bot_row
+
     metadata = _setup_metadata(bot_row)
     server_ip = str(metadata.get("setup_server_ip") or "").strip()
     if not server_ip:
@@ -2985,39 +3062,25 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
     stoploss_value = float(strategy_settings["stoploss_pct"]) / 100.0
     dca_stoploss_value = float(strategy_settings["dca_stoploss_pct"]) / 100.0
     leverage_value = float(strategy_settings["leverage"])
-    entry_5m_enabled = bool(strategy_settings["entry_5m_enabled"])
-    entry_15m_enabled = bool(strategy_settings["entry_15m_enabled"])
     entry_30m_enabled = bool(strategy_settings["entry_30m_enabled"])
     entry_1h_enabled = bool(strategy_settings["entry_1h_enabled"])
     entry_4h_enabled = bool(strategy_settings["entry_4h_enabled"])
     use_chg_filter = bool(strategy_settings["use_chg_filter"])
-    chg_5m_enabled = bool(strategy_settings["chg_5m_enabled"])
-    chg_15m_enabled = bool(strategy_settings["chg_15m_enabled"])
     chg_30m_enabled = bool(strategy_settings["chg_30m_enabled"])
     chg_1h_enabled = bool(strategy_settings["chg_1h_enabled"])
     chg_4h_enabled = bool(strategy_settings["chg_4h_enabled"])
-    chg_5m_min = float(strategy_settings["chg_5m_min"])
-    chg_5m_max = float(strategy_settings["chg_5m_max"])
-    chg_15m_min = float(strategy_settings["chg_15m_min"])
-    chg_15m_max = float(strategy_settings["chg_15m_max"])
     chg_30m_min = float(strategy_settings["chg_30m_min"])
     chg_30m_max = float(strategy_settings["chg_30m_max"])
     chg_1h_min = float(strategy_settings["chg_1h_min"])
     chg_1h_max = float(strategy_settings["chg_1h_max"])
     chg_4h_min = float(strategy_settings["chg_4h_min"])
     chg_4h_max = float(strategy_settings["chg_4h_max"])
-    dca_chg_5m_min = float(strategy_settings["dca_chg_5m_min"])
-    dca_chg_5m_max = float(strategy_settings["dca_chg_5m_max"])
-    dca_chg_15m_min = float(strategy_settings["dca_chg_15m_min"])
-    dca_chg_15m_max = float(strategy_settings["dca_chg_15m_max"])
     dca_chg_30m_min = float(strategy_settings["dca_chg_30m_min"])
     dca_chg_30m_max = float(strategy_settings["dca_chg_30m_max"])
     dca_chg_1h_min = float(strategy_settings["dca_chg_1h_min"])
     dca_chg_1h_max = float(strategy_settings["dca_chg_1h_max"])
     dca_chg_4h_min = float(strategy_settings["dca_chg_4h_min"])
     dca_chg_4h_max = float(strategy_settings["dca_chg_4h_max"])
-    chg_5m_exit_buffer = float(strategy_settings["chg_5m_exit_buffer"])
-    chg_15m_exit_buffer = float(strategy_settings["chg_15m_exit_buffer"])
     chg_30m_exit_buffer = float(strategy_settings["chg_30m_exit_buffer"])
     chg_1h_exit_buffer = float(strategy_settings["chg_1h_exit_buffer"])
     chg_4h_exit_buffer = float(strategy_settings["chg_4h_exit_buffer"])
@@ -3089,39 +3152,25 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
             stoploss_value=stoploss_value,
             dca_stoploss_value=dca_stoploss_value,
             leverage_value=leverage_value,
-            entry_5m_enabled=entry_5m_enabled,
-            entry_15m_enabled=entry_15m_enabled,
             entry_30m_enabled=entry_30m_enabled,
             entry_1h_enabled=entry_1h_enabled,
             entry_4h_enabled=entry_4h_enabled,
             use_chg_filter=use_chg_filter,
-            chg_5m_enabled=chg_5m_enabled,
-            chg_15m_enabled=chg_15m_enabled,
             chg_30m_enabled=chg_30m_enabled,
             chg_1h_enabled=chg_1h_enabled,
             chg_4h_enabled=chg_4h_enabled,
-            chg_5m_min=chg_5m_min,
-            chg_5m_max=chg_5m_max,
-            chg_15m_min=chg_15m_min,
-            chg_15m_max=chg_15m_max,
             chg_30m_min=chg_30m_min,
             chg_30m_max=chg_30m_max,
             chg_1h_min=chg_1h_min,
             chg_1h_max=chg_1h_max,
             chg_4h_min=chg_4h_min,
             chg_4h_max=chg_4h_max,
-            dca_chg_5m_min=dca_chg_5m_min,
-            dca_chg_5m_max=dca_chg_5m_max,
-            dca_chg_15m_min=dca_chg_15m_min,
-            dca_chg_15m_max=dca_chg_15m_max,
             dca_chg_30m_min=dca_chg_30m_min,
             dca_chg_30m_max=dca_chg_30m_max,
             dca_chg_1h_min=dca_chg_1h_min,
             dca_chg_1h_max=dca_chg_1h_max,
             dca_chg_4h_min=dca_chg_4h_min,
             dca_chg_4h_max=dca_chg_4h_max,
-            chg_5m_exit_buffer=chg_5m_exit_buffer,
-            chg_15m_exit_buffer=chg_15m_exit_buffer,
             chg_30m_exit_buffer=chg_30m_exit_buffer,
             chg_1h_exit_buffer=chg_1h_exit_buffer,
             chg_4h_exit_buffer=chg_4h_exit_buffer,
@@ -3311,6 +3360,9 @@ def get_bot_setup_state(bot_id: str, email: EmailStr, session_token: str) -> dic
     if not bot_row:
         raise HTTPException(status_code=404, detail="Purchased bot not found for this user")
 
+    _cleanup_legacy_strategy_settings_for_bot(user["id"], bot_id)
+    bot_row = get_user_purchased_bot_account(user["id"], bot_id) or bot_row
+
     metadata = _setup_metadata(bot_row)
     if str(metadata.get("setup_status") or "").lower() == "completed":
         exchange_key = _normalize_exchange_key(str(bot_row.get("exchange") or ""))
@@ -3352,6 +3404,8 @@ def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayloa
     if not bot_row:
         raise HTTPException(status_code=404, detail="Purchased bot not found for this user")
 
+    _cleanup_legacy_strategy_settings_for_bot(user["id"], bot_id)
+
     trade_type = _normalize_trade_type(payload.trade_type)
     dca_enabled = _is_dca_enabled(payload.dca_mode)
 
@@ -3391,39 +3445,25 @@ def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayloa
         "max_open_order": max_open_order,
         "stoploss_pct": stoploss_pct,
         "dca_stoploss_pct": dca_stoploss_pct,
-        "entry_5m_enabled": bool(payload.entry_5m_enabled),
-        "entry_15m_enabled": bool(payload.entry_15m_enabled),
         "entry_30m_enabled": bool(payload.entry_30m_enabled),
         "entry_1h_enabled": bool(payload.entry_1h_enabled),
         "entry_4h_enabled": bool(payload.entry_4h_enabled),
         "use_chg_filter": bool(payload.use_chg_filter),
-        "chg_5m_enabled": bool(payload.chg_5m_enabled),
-        "chg_15m_enabled": bool(payload.chg_15m_enabled),
         "chg_30m_enabled": bool(payload.chg_30m_enabled),
         "chg_1h_enabled": bool(payload.chg_1h_enabled),
         "chg_4h_enabled": bool(payload.chg_4h_enabled),
-        "chg_5m_min": _clamp_chg(payload.chg_5m_min),
-        "chg_5m_max": _clamp_chg(payload.chg_5m_max),
-        "chg_15m_min": _clamp_chg(payload.chg_15m_min),
-        "chg_15m_max": _clamp_chg(payload.chg_15m_max),
         "chg_30m_min": _clamp_chg(payload.chg_30m_min),
         "chg_30m_max": _clamp_chg(payload.chg_30m_max),
         "chg_1h_min": _clamp_chg(payload.chg_1h_min),
         "chg_1h_max": _clamp_chg(payload.chg_1h_max),
         "chg_4h_min": _clamp_chg(payload.chg_4h_min),
         "chg_4h_max": _clamp_chg(payload.chg_4h_max),
-        "dca_chg_5m_min": _clamp_chg(payload.dca_chg_5m_min),
-        "dca_chg_5m_max": _clamp_chg(payload.dca_chg_5m_max),
-        "dca_chg_15m_min": _clamp_chg(payload.dca_chg_15m_min),
-        "dca_chg_15m_max": _clamp_chg(payload.dca_chg_15m_max),
         "dca_chg_30m_min": _clamp_chg(payload.dca_chg_30m_min),
         "dca_chg_30m_max": _clamp_chg(payload.dca_chg_30m_max),
         "dca_chg_1h_min": _clamp_chg(payload.dca_chg_1h_min),
         "dca_chg_1h_max": _clamp_chg(payload.dca_chg_1h_max),
         "dca_chg_4h_min": _clamp_chg(payload.dca_chg_4h_min),
         "dca_chg_4h_max": _clamp_chg(payload.dca_chg_4h_max),
-        "chg_5m_exit_buffer": _clamp_buffer(payload.chg_5m_exit_buffer),
-        "chg_15m_exit_buffer": _clamp_buffer(payload.chg_15m_exit_buffer),
         "chg_30m_exit_buffer": _clamp_buffer(payload.chg_30m_exit_buffer),
         "chg_1h_exit_buffer": _clamp_buffer(payload.chg_1h_exit_buffer),
         "chg_4h_exit_buffer": _clamp_buffer(payload.chg_4h_exit_buffer),
@@ -3455,6 +3495,43 @@ def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayloa
             "name": updated.get("bot_name") or bot_id,
         },
         "setup": _build_setup_state_payload(updated, history=history),
+    }
+
+
+@app.post("/subscriptions/setup/cleanup-legacy-settings")
+def cleanup_legacy_strategy_settings(payload: EmailSessionPayload) -> dict[str, Any]:
+    user = get_user_or_404(str(payload.email))
+    _ = _validate_session_token_for_user(user["id"], payload.session_token)
+
+    total_bots = len(list_user_purchased_bot_accounts(user["id"]))
+    cleaned_bot_ids = _cleanup_legacy_strategy_settings_for_user(user["id"])
+
+    return {
+        "success": True,
+        "message": "Legacy 5m/15m strategy settings cleanup completed",
+        "summary": {
+            "total_bots": total_bots,
+            "cleaned_bots": len(cleaned_bot_ids),
+            "unchanged_bots": max(0, total_bots - len(cleaned_bot_ids)),
+        },
+        "cleaned_bot_ids": cleaned_bot_ids,
+    }
+
+
+@app.post("/settings/cleanup-deprecated-admin-fields")
+def cleanup_deprecated_admin_fields(payload: EmailSessionPayload) -> dict[str, Any]:
+    user = get_user_or_404(str(payload.email))
+    _ = _validate_session_token_for_user(user["id"], payload.session_token)
+
+    cleanup_result = _cleanup_deprecated_admin_settings_for_user(user["id"])
+
+    return {
+        "success": True,
+        "message": "Deprecated admin settings cleanup completed",
+        "summary": {
+            "changed": bool(cleanup_result["changed"]),
+        },
+        "settings": cleanup_result["cleaned_settings"],
     }
 
 
@@ -3509,6 +3586,40 @@ def put_settings(payload: UserSettingsPayload) -> dict[str, dict]:
     saved = upsert_user_settings(user["id"], sanitized_input)
     safe_saved = _sanitize_connections_for_response(saved)
     return {"settings": safe_saved}
+
+
+@app.post("/admin/email/test")
+def test_admin_email(payload: TestEmailPayload) -> dict[str, str]:
+    """
+    Send a test email using admin-provided SMTP configuration.
+    This endpoint does not require authentication for now (should be protected by admin check).
+    """
+    logger.warning("admin_test_email_request to=%s has_email=%s has_smtp_config=%s", str(payload.toEmail), bool(payload.email), isinstance(payload.smtpConfig, dict))
+    try:
+        smtp_config: dict[str, Any] | None = None
+        if payload.email:
+            user = get_user_by_email(str(payload.email))
+            if user:
+                smtp_config = _build_smtp_config_from_admin_settings(int(user["id"]))
+                logger.warning("admin_test_email_db_config_loaded email=%s found=%s", str(payload.email), smtp_config is not None)
+
+        if smtp_config is None and isinstance(payload.smtpConfig, dict):
+            smtp_config = payload.smtpConfig
+            logger.warning("admin_test_email_using_request_config to=%s", str(payload.toEmail))
+
+        if smtp_config is None:
+            logger.warning("admin_test_email_missing_smtp_config to=%s", str(payload.toEmail))
+            raise ValueError("SMTP settings not found in Admin > Email")
+
+        send_test_email(str(payload.toEmail), smtp_config)
+        logger.warning("admin_test_email_success to=%s", str(payload.toEmail))
+        return {"message": "Test email sent successfully"}
+    except ValueError as e:
+        logger.exception("admin_test_email_value_error to=%s", str(payload.toEmail))
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("admin_test_email_unhandled_error to=%s", str(payload.toEmail))
+        raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
 
 
 @app.post("/profile/avatar")

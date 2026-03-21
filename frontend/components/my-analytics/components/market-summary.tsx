@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatCurrencyTextFromUsd } from "@/lib/currency-runtime"
 import { marketSummaryData } from "../data"
 
 export function MarketSummary() {
@@ -18,7 +19,7 @@ export function MarketSummary() {
           {marketSummaryData.map((item, index) => (
             <div key={index} className="grid grid-cols-3 gap-4">
               <div className="font-medium">{item.market}</div>
-              <div>{item.price}</div>
+              <div>{formatCurrencyTextFromUsd(item.price)}</div>
               <div className={item.isPositive ? "text-green-500" : "text-red-500"}>{item.change}</div>
             </div>
           ))}

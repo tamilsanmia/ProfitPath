@@ -1,4 +1,5 @@
 import "@/app/globals.css";
+import CurrencyRuntime from "@/components/currency-runtime";
 import ThemeProvider from "@/components/theme-provider";
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
@@ -20,6 +21,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning data-name="root-html">
       <body className={inter.className} suppressHydrationWarning data-name="root-body">
         <ThemeProvider>
+          <CurrencyRuntime />
           <div data-name="app-root-content">{children}</div>
         </ThemeProvider>
       </body>

@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencyFromUsd } from "@/lib/currency-runtime";
 import type { ProfitData, TimeframeType } from "../types";
 
 interface ProfitChartProps {
@@ -45,7 +46,7 @@ export function ProfitChart({ profitData, timeframe, onTimeframeChange }: Profit
           <div className="flex  h-full w-full gap-2">
             {getProfitData().map((item, index) => (
               <div key={index} className="flex flex-col items-center justify-end space-y-1 flex-1">
-                <div className="text-[8px] min-[450px]:text-xs font-medium text-green-500">${item.total.toLocaleString()}</div>
+                <div className="text-[8px] min-[450px]:text-xs font-medium text-green-500">{formatCurrencyFromUsd(item.total)}</div>
                 <div
                   className="w-full rounded-t bg-gradient-to-t from-green-500 to-green-400"
                   style={{

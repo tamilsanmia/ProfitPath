@@ -10,6 +10,7 @@ services:
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
       CI: "true"
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       BACKEND_URL: http://profitpath-backend:8000
       NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}

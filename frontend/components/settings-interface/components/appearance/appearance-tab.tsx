@@ -7,7 +7,7 @@ import { SettingsSelect } from "../shared/settings-select"
 import { SettingsToggle } from "../shared/settings-toggle"
 import { Monitor, Moon, Sun, Palette, Globe, Clock } from "lucide-react"
 import type { AppearanceSettings } from "../../types"
-import { LANGUAGES, TIMEZONES } from "../../constants"
+import { CURRENCIES, LANGUAGES, TIMEZONES } from "../../constants"
 import { createSettingsTranslator } from "../../i18n"
 
 interface AppearanceTabProps {
@@ -80,6 +80,10 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({ appearance, onAppe
 
   const handleLanguageChange = (language: string) => {
     onAppearanceChange({ language })
+  }
+
+  const handleCurrencyChange = (currency: string) => {
+    onAppearanceChange({ currency })
   }
 
   const handleTimezoneChange = (timezone: string) => {
@@ -208,6 +212,15 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({ appearance, onAppe
             value={appearance.timezone}
             onValueChange={handleTimezoneChange}
             options={TIMEZONES}
+          />
+
+          <SettingsSelect
+            id="currency"
+            label="Currency"
+            description="Choose the default display currency for money values"
+            value={appearance.currency}
+            onValueChange={handleCurrencyChange}
+            options={CURRENCIES}
           />
         </CardContent>
       </Card>

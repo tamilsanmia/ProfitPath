@@ -12,7 +12,19 @@ type SessionUser = {
   email: string;
   referral_url?: string;
   avatar?: string;
+  is_admin?: boolean;
 };
+
+function isAdminUser(user?: SessionUser | null): boolean {
+  const configured = String(process.env.ADMIN_USERNAME ?? "").trim().toLowerCase();
+  if (!configured || !user) {
+    return false;
+  }
+
+  const username = String(user.username ?? "").trim().toLowerCase();
+  const emailLocalPart = String(user.email ?? "").split("@")[0]?.trim().toLowerCase() ?? "";
+  return username === configured || emailLocalPart === configured;
+}
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -27,11 +39,13 @@ export async function GET() {
     const user = JSON.parse(raw) as SessionUser;
     const hasStaleReferralUrl = typeof user?.referral_url === "string" && user.referral_url.includes("localhost");
     if (user?.username && user?.referral_url && typeof user?.avatar === "string" && user.avatar.length > 0 && !hasStaleReferralUrl) {
-      return NextResponse.json({ user }, { status: 200 });
+      const enrichedUser: SessionUser = { ...user, is_admin: isAdminUser(user) };
+      return NextResponse.json({ user: enrichedUser }, { status: 200 });
     }
 
     if (!user?.email) {
-      return NextResponse.json({ user }, { status: 200 });
+      const enrichedUser: SessionUser = { ...user, is_admin: isAdminUser(user) };
+      return NextResponse.json({ user: enrichedUser }, { status: 200 });
     }
 
     const backendResponse = await fetchBackend(
@@ -66,8 +80,9 @@ export async function GET() {
       return NextResponse.json({ user }, { status: 200 });
     }
 
-    const response = NextResponse.json({ user: freshUser }, { status: 200 });
-    response.cookies.set("pp_user", JSON.stringify(freshUser), {
+    const enrichedFreshUser: SessionUser = { ...freshUser, is_admin: isAdminUser(freshUser) };
+    const response = NextResponse.json({ user: enrichedFreshUser }, { status: 200 });
+    response.cookies.set("pp_user", JSON.stringify(enrichedFreshUser), {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
