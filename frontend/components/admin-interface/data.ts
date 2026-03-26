@@ -1,5 +1,147 @@
 import type { AdminPortalSettings, AdminSection } from "./types";
 
+const DEFAULT_EMAIL_TEMPLATE_HEADER = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width" />
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <style>
+    body {
+      background-color: #f6f6f6;
+      font-family: sans-serif;
+      -webkit-font-smoothing: antialiased;
+      font-size: 14px;
+      line-height: 1.4;
+      margin: 0;
+      padding: 0;
+      -ms-text-size-adjust: 100%;
+      -webkit-text-size-adjust: 100%;
+    }
+    table {
+      border-collapse: separate;
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+      width: 100%;
+    }
+    table td {
+      font-family: sans-serif;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    .body {
+      background-color: #f6f6f6;
+      width: 100%;
+    }
+    .container {
+      display: block;
+      margin: 0 auto !important;
+      max-width: 680px;
+      padding: 10px;
+      width: 680px;
+    }
+    .content {
+      box-sizing: border-box;
+      display: block;
+      margin: 0 auto;
+      max-width: 680px;
+      padding: 10px;
+    }
+    .main {
+      background: #fff;
+      border-radius: 3px;
+      width: 100%;
+    }
+    .header {
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px 8px 0 0;
+      background: transparent;
+    }
+    .header img {
+      max-width: 150px;
+    }
+    .wrapper {
+      box-sizing: border-box;
+      padding: 20px;
+      color: #222222;
+    }
+    .footer {
+      clear: both;
+      padding-top: 10px;
+      text-align: center;
+      width: 100%;
+    }
+    .footer td, .footer p, .footer span, .footer a {
+      color: #999999;
+      font-size: 12px;
+      text-align: center;
+    }
+    hr {
+      border: 0;
+      border-bottom: 1px solid #f6f6f6;
+      margin: 20px 0;
+    }
+    @media only screen and (max-width: 620px) {
+      table[class=body] .content {
+        padding: 0 !important;
+      }
+      table[class=body] .container {
+        padding: 0 !important;
+        width: 100% !important;
+      }
+      table[class=body] .main {
+        border-left-width: 0 !important;
+        border-radius: 0 !important;
+        border-right-width: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <table border="0" cellpadding="0" cellspacing="0" class="body">
+    <tr>
+      <td>&nbsp;</td>
+      <td class="container">
+        <div class="content">
+          <div class="header">
+            <table border="0" cellpadding="0" cellspacing="0">
+              <tr>
+                <td class="header">
+                  <img src="{logo_url}" alt="{companyname} Logo">
+                </td>
+              </tr>
+            </table>
+          </div>
+          <table class="main">
+            <tr>
+              <td class="wrapper">
+                <table border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td>`;
+
+const DEFAULT_EMAIL_TEMPLATE_FOOTER = `</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+          <div class="footer">
+            <table border="0" cellpadding="0" cellspacing="0">
+              <tr>
+                <td class="content-block">
+                  <span>&copy; 2025 {companyname}. All rights reserved.</span>
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </td>
+      <td>&nbsp;</td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
 export const ADMIN_SECTIONS: AdminSection[] = [
   {
     id: "general",
@@ -91,6 +233,8 @@ export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
     smtpUsername: "",
     smtpPassword: "",
     emailCharset: "UTF-8",
+    predefinedHeader: DEFAULT_EMAIL_TEMPLATE_HEADER,
+    predefinedFooter: DEFAULT_EMAIL_TEMPLATE_FOOTER,
   },
   systemServerInformation: {
     environment: "production",

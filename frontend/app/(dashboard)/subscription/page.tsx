@@ -1,14 +1,5 @@
-import { SubscriptionInterface } from "@/components/subscription-interface/index";
-
-export const metadata = {
-  title: "Subscription | DefibotX",
-  description: "Advanced AI-powered trading bot for cryptocurrency markets",
-};
+import { redirect } from "next/navigation";
 
 export default function SubscriptionPage() {
-  return (
-    <section data-name="page-dashboard-subscription">
-      <SubscriptionInterface />
-    </section>
-  );
+  redirect("/new-bot");
 }

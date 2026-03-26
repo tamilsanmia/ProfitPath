@@ -1,9 +1,10 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SettingsSection } from "@/components/settings-interface/components/shared/settings-section";
@@ -30,6 +31,35 @@ const CHARSET_OPTIONS = [
 export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) => {
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const SAMPLE_CONTENT = `
+    <p style="margin:0 0 12px; text-align:center; font-size:18px; font-weight:600; color:#111827;">Hi John Doe</p>
+    <hr style="border:0; border-bottom:1px solid #e5e7eb; margin:16px 0 22px;">
+    <h1 style="margin:0 0 16px; font-size:32px; line-height:1.15; color:#0f172a; font-weight:700; text-align:center;">Notification Title</h1>
+    <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">This is a sample notification email. The actual content will be inserted here dynamically for each notification type.</p>
+    <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">If you need assistance, please contact our support team.</p>
+    <p style="margin:20px 0 10px; text-align:center;">
+      <a href="#" style="display:inline-block; background:#0b63f6; color:#ffffff; text-decoration:none; padding:10px 18px; border-radius:6px; font-weight:600;">Action Button</a>
+    </p>
+    <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">Kind regards,<br><strong>${value.fromName || "ProfitPath"} Team</strong></p>
+  `;
+
+  const previewHtml = useMemo(() => {
+    const header = value.predefinedHeader || "";
+    const footer = value.predefinedFooter || "";
+    return header + SAMPLE_CONTENT + footer;
+  }, [value.predefinedHeader, value.predefinedFooter, value.fromName]);
+
+  useEffect(() => {
+    if (!showPreview || !iframeRef.current) return;
+    const doc = iframeRef.current.contentDocument;
+    if (!doc) return;
+    doc.open();
+    doc.write(previewHtml);
+    doc.close();
+  }, [previewHtml, showPreview]);
 
   const handleSendTestEmail = async () => {
     if (!testEmailAddress.trim()) {
@@ -63,6 +93,8 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
             fromEmail: value.fromEmail,
             fromName: value.fromName,
             charset: value.emailCharset,
+            predefinedHeader: value.predefinedHeader,
+            predefinedFooter: value.predefinedFooter,
           },
         }),
       });
@@ -239,6 +271,68 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
               {sendingTestEmail ? "Sending..." : "Send Test Email"}
             </Button>
           </div>
+        </div>
+
+        {/* Email Template */}
+        <div className="border-t pt-6">
+          <h3 className="text-sm font-semibold mb-4">Email Template</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Use these wrappers for all HTML emails. The content body is inserted between header and footer.
+          </p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email-predefined-header">Predefined Header</Label>
+              <Textarea
+                id="email-predefined-header"
+                value={value.predefinedHeader}
+                onChange={(e) => onChange({ predefinedHeader: e.target.value })}
+                rows={12}
+                className="font-mono text-xs"
+                placeholder="<!DOCTYPE html>..."
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email-predefined-footer">Predefined Footer</Label>
+              <Textarea
+                id="email-predefined-footer"
+                value={value.predefinedFooter}
+                onChange={(e) => onChange({ predefinedFooter: e.target.value })}
+                rows={12}
+                className="font-mono text-xs"
+                placeholder="</td>..."
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Email Template Preview */}
+        <div className="border-t pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-semibold">Email Preview</h3>
+              <p className="text-sm text-muted-foreground">
+                Live preview of header + sample content + footer
+              </p>
+            </div>
+            <Button
+              variant={showPreview ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowPreview((prev) => !prev)}
+            >
+              {showPreview ? "Hide Preview" : "Show Preview"}
+            </Button>
+          </div>
+          {showPreview && (
+            <div className="rounded-lg border bg-muted/30 overflow-hidden">
+              <iframe
+                ref={iframeRef}
+                title="Email Template Preview"
+                sandbox="allow-same-origin"
+                className="w-full border-0"
+                style={{ height: 700 }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </SettingsSection>

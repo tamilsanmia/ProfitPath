@@ -38,6 +38,8 @@ export type AdminPortalSettings = {
     smtpUsername: string;
     smtpPassword: string;
     emailCharset: string;
+    predefinedHeader: string;
+    predefinedFooter: string;
   };
   systemServerInformation: {
     environment: string;

@@ -42,6 +42,7 @@ export async function POST(request: Request) {
         model: body?.model,
         trade_type: body?.trade_type,
         dca_mode: body?.dca_mode,
+        strategy_name: body?.strategy_name,
         stake_amount: body?.stake_amount,
         max_open_order: Number(body?.max_open_order ?? 15),
         capital_usdt: Number(body?.capital_usdt ?? 0),

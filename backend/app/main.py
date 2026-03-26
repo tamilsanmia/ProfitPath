@@ -9,6 +9,8 @@ import re
 import shlex
 import subprocess
 import tempfile
+import platform
+import shutil
 from typing import Any
 from datetime import datetime, timedelta, timezone
 import time
@@ -511,6 +513,7 @@ class SubscriptionCompletePayload(BaseModel):
     exchange: str
     model: str
     trade_type: str | None = None
+    strategy_name: str | None = None
     dca_mode: str | None = None
     stake_amount: float | None = None
     max_open_order: int | None = None
@@ -595,6 +598,7 @@ def _build_smtp_config_from_admin_settings(user_id: int) -> dict[str, Any] | Non
     settings_payload = get_user_settings(user_id) or {}
     admin_portal = settings_payload.get("adminPortal") if isinstance(settings_payload.get("adminPortal"), dict) else {}
     email_settings = admin_portal.get("email") if isinstance(admin_portal.get("email"), dict) else {}
+    general_settings = admin_portal.get("general") if isinstance(admin_portal.get("general"), dict) else {}
 
     host = str(email_settings.get("smtpHost") or "").strip()
     from_email = str(email_settings.get("fromEmail") or "").strip()
@@ -616,6 +620,10 @@ def _build_smtp_config_from_admin_settings(user_id: int) -> dict[str, Any] | Non
         "fromEmail": from_email,
         "fromName": str(email_settings.get("fromName") or "").strip(),
         "charset": str(email_settings.get("emailCharset") or "UTF-8").strip() or "UTF-8",
+        "predefinedHeader": str(email_settings.get("predefinedHeader") or ""),
+        "predefinedFooter": str(email_settings.get("predefinedFooter") or ""),
+        "companyName": str(general_settings.get("companyName") or general_settings.get("siteTitle") or "ProfitPath").strip() or "ProfitPath",
+        "logoUrl": str(general_settings.get("companyLogoLightUrl") or general_settings.get("companyLogoDarkUrl") or "").strip(),
     }
 
 
@@ -874,6 +882,10 @@ def _cleanup_legacy_strategy_settings_for_user(user_id: int) -> list[str]:
 def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     metadata = _setup_metadata(bot_row)
 
+    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(metadata.get("strategy_name") or "").strip() or "ProfitPath")
+    if not strategy_name:
+        strategy_name = "ProfitPath"
+
     trade_type = _normalize_trade_type(str(metadata.get("trade_type") or bot_row.get("model") or "compound"))
     dca_enabled = _is_dca_enabled(str(metadata.get("dca_mode") or "Disable"))
 
@@ -934,6 +946,7 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     dca_reentry_max_drawdown = _normalize_bounded_float(metadata.get("dca_reentry_max_drawdown"), default_value=-0.3, min_value=-1.0, max_value=0.0)
 
     return {
+        "strategy_name": strategy_name,
         "trade_type": trade_type,
         "dca_mode": "Enable" if dca_enabled else "Disable",
         "dca_enabled": dca_enabled,
@@ -2577,6 +2590,9 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
 
     account_type = _normalize_account_type(payload.account_type or "demo")
     trade_type = _normalize_trade_type(payload.trade_type or payload.model)
+    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(payload.strategy_name or "").strip() or "ProfitPath")
+    if not strategy_name:
+        strategy_name = "ProfitPath"
     dca_mode = str(payload.dca_mode or "Disable").strip() or "Disable"
     dca_enabled = _is_dca_enabled(dca_mode)
 
@@ -2608,6 +2624,7 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
                 "source": "subscription_checkout",
                 "account_type": account_type,
                 "trade_type": trade_type,
+                "strategy_name": strategy_name,
                 "dca_mode": "Enable" if dca_enabled else "Disable",
                 "dca_enabled": dca_enabled,
                 "stake_amount": stake_amount,
@@ -3052,6 +3069,8 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
 
     account_type = _normalize_account_type(str(metadata.get("account_type") or "real"))
     strategy_settings = _normalize_strategy_settings(bot_row)
+    preferred_strategy_name = str(strategy_settings.get("strategy_name") or "").strip() or "ProfitPath"
+    requested_strategy_name = str(payload.strategy_name or "").strip() or preferred_strategy_name
     trade_type = str(strategy_settings["trade_type"])
     dca_enabled = bool(strategy_settings["dca_enabled"])
     capital_usdt = float(bot_row.get("capital_usdt") or 0)
@@ -3139,7 +3158,7 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
             server_ip=server_ip,
             bot_id=bot_id,
             exchange_key=exchange_key,
-            strategy_name=payload.strategy_name,
+            strategy_name=requested_strategy_name,
             strategy_code=payload.strategy_code,
             config_override=payload.config_override,
             api_key=api_key,
@@ -3747,6 +3766,88 @@ def change_password(payload: ChangePasswordPayload) -> dict[str, str]:
 def docker_health() -> dict[str, str | bool]:
     ok, message = safe_docker_ping()
     return {"ok": ok, "message": message}
+
+
+@app.get("/admin/server-status")
+def admin_server_status() -> dict[str, Any]:
+    """Return live status of all app services and system resources."""
+
+    # --- System info (stdlib only, no psutil) ---
+    uname = platform.uname()
+    load_avg = os.getloadavg()
+    disk = shutil.disk_usage("/")
+    uptime_seconds: float | None = None
+    try:
+        with open("/proc/uptime", "r") as f:
+            uptime_seconds = float(f.read().split()[0])
+    except Exception:
+        pass
+
+    # Memory from /proc/meminfo (Linux only)
+    mem_total = mem_available = mem_used = 0
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = int(line.split()[1]) * 1024
+                elif line.startswith("MemAvailable:"):
+                    mem_available = int(line.split()[1]) * 1024
+            mem_used = mem_total - mem_available
+    except Exception:
+        pass
+
+    # --- Service health checks ---
+    pg_ok = postgres_health()
+    redis_ok = redis_health()
+    docker_ok, docker_msg = safe_docker_ping()
+
+    # --- Container statuses ---
+    containers: list[dict[str, str]] = []
+    try:
+        client = get_docker_client()
+        for c in client.containers.list(all=True):
+            containers.append({
+                "id": c.short_id,
+                "name": c.name,
+                "status": c.status,
+                "image": c.image.tags[0] if c.image.tags else c.image.short_id,
+            })
+    except Exception:
+        pass
+
+    return {
+        "system": {
+            "hostname": uname.node,
+            "os": f"{uname.system} {uname.release}",
+            "arch": uname.machine,
+            "python": platform.python_version(),
+            "cpuCount": os.cpu_count() or 0,
+            "loadAvg1m": round(load_avg[0], 2),
+            "loadAvg5m": round(load_avg[1], 2),
+            "loadAvg15m": round(load_avg[2], 2),
+            "uptimeSeconds": round(uptime_seconds, 0) if uptime_seconds else None,
+        },
+        "memory": {
+            "totalBytes": mem_total,
+            "usedBytes": mem_used,
+            "availableBytes": mem_available,
+            "usedPercent": round((mem_used / mem_total) * 100, 1) if mem_total else 0,
+        },
+        "disk": {
+            "totalBytes": disk.total,
+            "usedBytes": disk.used,
+            "freeBytes": disk.free,
+            "usedPercent": round((disk.used / disk.total) * 100, 1) if disk.total else 0,
+        },
+        "services": {
+            "postgres": "online" if pg_ok else "offline",
+            "redis": "online" if redis_ok else "offline",
+            "docker": "online" if docker_ok else "offline",
+            "dockerMessage": docker_msg,
+            "backend": "online",
+        },
+        "containers": containers,
+    }
 
 
 @app.get("/docker/info")

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -697,6 +698,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     deploy_unavailable_reason?: string
     last_error?: string
     strategy_settings?: {
+      strategy_name?: string
       trade_type?: string
       dca_mode?: string
       dca_enabled?: boolean
@@ -803,6 +805,94 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   })
   const setupBotId = publicView ? null : selectedId
 
+  const refreshSetupState = useCallback(async () => {
+    if (!setupBotId) {
+      setSetupState(null)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup`, { cache: "no-store" })
+      const payload = (await res.json().catch(() => ({}))) as {
+        setup?: {
+          status?: string
+          last_step?: string
+          server_ip?: string
+          backend_server_ip?: string
+          deploy_enabled?: boolean
+          deploy_unavailable_reason?: string
+          last_error?: string
+          strategy_settings?: {
+            strategy_name?: string
+            trade_type?: string
+            dca_mode?: string
+            dca_enabled?: boolean
+            stake_amount?: number
+            max_open_order?: number
+            stoploss_pct?: number
+            dca_stoploss_pct?: number
+            entry_30m_enabled?: boolean
+            entry_1h_enabled?: boolean
+            entry_4h_enabled?: boolean
+            use_chg_filter?: boolean
+            chg_30m_enabled?: boolean
+            chg_1h_enabled?: boolean
+            chg_4h_enabled?: boolean
+            chg_30m_min?: number
+            chg_30m_max?: number
+            chg_1h_min?: number
+            chg_1h_max?: number
+            chg_4h_min?: number
+            chg_4h_max?: number
+            dca_chg_30m_min?: number
+            dca_chg_30m_max?: number
+            dca_chg_1h_min?: number
+            dca_chg_1h_max?: number
+            dca_chg_4h_min?: number
+            dca_chg_4h_max?: number
+            chg_30m_exit_buffer?: number
+            chg_1h_exit_buffer?: number
+            chg_4h_exit_buffer?: number
+            dca_reentry_min_profit?: number
+            dca_reentry_max_drawdown?: number
+            leverage?: number
+          }
+          history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+        }
+      }
+
+      if (!res.ok) {
+        setSetupState(null)
+        return
+      }
+
+      const setup = payload.setup ?? null
+      setSetupState(setup)
+      if (!setup) return
+
+      if (setup.status === "completed") {
+        setPipelineStep(3)
+      } else if ((setup.history ?? []).some((item) => String(item?.status || "") === "api_validated")) {
+        setPipelineStep(3)
+      } else if (setup.server_ip) {
+        setPipelineStep(2)
+      } else {
+        setPipelineStep(1)
+      }
+
+      if (setup.status === "completed") {
+        setSetupMessage(`Setup already completed | Server IP: ${setup.server_ip || "-"}`)
+        setSetupError(null)
+      } else if (setup.last_error) {
+        setSetupError(setup.last_error)
+      } else if (setup.last_step) {
+        setSetupMessage(`Current step: ${setup.last_step.replace(/_/g, " ")} (${setup.status || "pending"})`)
+      }
+    } catch {
+      setSetupState(null)
+    }
+  }, [setupBotId])
+
   const apiBase = publicView ? "/api/shared/bot-accounts" : "/api/bots"
 
   // Real data hooks
@@ -820,6 +910,18 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   useEffect(() => {
     setShowPaymentBanner(paymentDone)
   }, [paymentDone])
+
+  useEffect(() => {
+    if (!showPaymentBanner) return
+
+    const timer = window.setTimeout(() => {
+      setShowPaymentBanner(false)
+    }, 10000)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [showPaymentBanner])
 
   useEffect(() => {
     if (publicView) return
@@ -860,100 +962,8 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   }
 
   useEffect(() => {
-    if (!setupBotId) {
-      setSetupState(null)
-      return
-    }
-
-    let cancelled = false
-    fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup`, { cache: "no-store" })
-      .then(async (res) => {
-        const payload = (await res.json().catch(() => ({}))) as {
-          setup?: {
-            status?: string
-            last_step?: string
-            server_ip?: string
-            backend_server_ip?: string
-            deploy_enabled?: boolean
-            deploy_unavailable_reason?: string
-            last_error?: string
-            strategy_settings?: {
-              trade_type?: string
-              dca_mode?: string
-              dca_enabled?: boolean
-              stake_amount?: number
-              max_open_order?: number
-              stoploss_pct?: number
-              dca_stoploss_pct?: number
-              entry_30m_enabled?: boolean
-              entry_1h_enabled?: boolean
-              entry_4h_enabled?: boolean
-              use_chg_filter?: boolean
-              chg_30m_enabled?: boolean
-              chg_1h_enabled?: boolean
-              chg_4h_enabled?: boolean
-              chg_30m_min?: number
-              chg_30m_max?: number
-              chg_1h_min?: number
-              chg_1h_max?: number
-              chg_4h_min?: number
-              chg_4h_max?: number
-              dca_chg_30m_min?: number
-              dca_chg_30m_max?: number
-              dca_chg_1h_min?: number
-              dca_chg_1h_max?: number
-              dca_chg_4h_min?: number
-              dca_chg_4h_max?: number
-              chg_30m_exit_buffer?: number
-              chg_1h_exit_buffer?: number
-              chg_4h_exit_buffer?: number
-              dca_reentry_min_profit?: number
-              dca_reentry_max_drawdown?: number
-              leverage?: number
-            }
-            history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
-          }
-        }
-        if (!res.ok) {
-          if (!cancelled) {
-            setSetupState(null)
-          }
-          return
-        }
-        if (cancelled) return
-        const setup = payload.setup ?? null
-        setSetupState(setup)
-        if (!setup) return
-
-        if (setup.status === "completed") {
-          setPipelineStep(3)
-        } else if ((setup.history ?? []).some((item) => String(item?.status || "") === "api_validated")) {
-          setPipelineStep(3)
-        } else if (setup.server_ip) {
-          setPipelineStep(2)
-        } else {
-          setPipelineStep(1)
-        }
-
-        if (setup.status === "completed") {
-          setSetupMessage(`Setup already completed | Server IP: ${setup.server_ip || "-"}`)
-          setSetupError(null)
-        } else if (setup.last_error) {
-          setSetupError(setup.last_error)
-        } else if (setup.last_step) {
-          setSetupMessage(`Current step: ${setup.last_step.replace(/_/g, " ")} (${setup.status || "pending"})`)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSetupState(null)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [setupBotId])
+    void refreshSetupState()
+  }, [refreshSetupState])
 
   const publicBot = useMemo(() => {
     if (!selectedId) return null
@@ -997,12 +1007,24 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   }, [setupError, setupState?.backend_server_ip, setupState?.last_error])
 
   const setupHistory = setupState?.history ?? []
+  const selectedStrategyName = String(setupState?.strategy_settings?.strategy_name || "ProfitPath")
+    .replace(/[^A-Za-z0-9_]/g, "")
+    || "ProfitPath"
+  const bot = publicView ? publicBot : bots.find((b) => b.id === selectedId) ?? null
+  const displayBotId = bot?.id || selectedId || "-"
+
+  const botExchange = normalizeExchangeName((bot as { name?: string } | null)?.name)
+  const botAccountType = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase()
+  const isBotLiveMode = stats ? !Boolean(stats.config?.dry_run) : botAccountType.includes("real")
+  const botIsDemo = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase().includes("demo")
+  const showApiStep = !botIsDemo
+
   const isApiValidated = setupHistory.some((item) => String(item?.status || "") === "api_validated")
   const isDeployCompleted =
     String(setupState?.status || "").toLowerCase() === "completed" ||
     setupHistory.some((item) => String(item?.status || "") === "deploy_completed")
   const isServerCreated = Boolean(setupState?.server_ip)
-  const isApiStepCompleted = isApiValidated || String(setupState?.status || "").toLowerCase() === "completed"
+  const isApiStepCompleted = !showApiStep || isApiValidated || String(setupState?.status || "").toLowerCase() === "completed"
   const deployStepAvailable = setupState?.deploy_enabled !== false
   const setupInstallerLoading = setupLoading || setupValidateLoading || setupDeployLoading
   const setupInstallerLoadingText = setupLoading
@@ -1013,14 +1035,17 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     ? "Deploying bot..."
     : null
 
-  const bot = publicView ? publicBot : bots.find((b) => b.id === selectedId) ?? null
-  const displayBotId = bot?.id || selectedId || "-"
+  useEffect(() => {
+    if (!setupBotId) return
+    const status = String(setupState?.status || "").toLowerCase()
+    if (!setupInstallerLoading && (status === "completed" || status === "failed")) return
 
-  const botExchange = normalizeExchangeName((bot as { name?: string } | null)?.name)
-  const botAccountType = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase()
-  const isBotLiveMode = stats ? !Boolean(stats.config?.dry_run) : botAccountType.includes("real")
-  const botIsDemo = String((bot as { account_type?: string } | null)?.account_type || "").toLowerCase().includes("demo")
-  const showApiStep = !botIsDemo
+    const timer = window.setInterval(() => {
+      void refreshSetupState()
+    }, 5000)
+
+    return () => window.clearInterval(timer)
+  }, [setupBotId, setupInstallerLoading, setupState?.status, refreshSetupState])
   const showCreatedServerIp = botExchange === "Binance" && !botIsDemo
   const exchangeWhitelistIps = useMemo(() => {
     const result: string[] = []
@@ -1663,33 +1688,11 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     setSetupMessage(null)
 
     try {
-      const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ strategyName: "ProfitPath", dryRun: false }),
-      })
+      const deployPayload = await deployBotFlow({ dryRun: botIsDemo })
 
-      const payload = (await res.json().catch(() => ({}))) as {
-        error?: string
-        detail?: string
-        message?: string
-        setup?: {
-          server_ip?: string
-          backend_server_ip?: string
-          status?: string
-          last_step?: string
-          last_error?: string
-          history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
-        }
-      }
-
-      if (!res.ok) {
-        throw new Error(payload.error || payload.detail || payload.message || "Bot deployment failed")
-      }
-
-      setSetupState(payload.setup ?? null)
-      setSetupMessage(payload.message || "Bot deployed")
-      setSetupError(payload.setup?.last_error || null)
+      setSetupState(deployPayload.setup ?? null)
+      setSetupMessage(deployPayload.message || "Bot deployed")
+      setSetupError(deployPayload.setup?.last_error || null)
       refetchStats()
       refetchOpen()
     } catch (err) {
@@ -1697,6 +1700,43 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     } finally {
       setSetupDeployLoading(false)
     }
+  }
+
+  const deployBotFlow = async ({ dryRun, apiKey, apiSecret }: { dryRun: boolean; apiKey?: string; apiSecret?: string }) => {
+    if (!setupBotId) {
+      throw new Error("Bot setup is not ready")
+    }
+
+    const res = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        strategyName: selectedStrategyName,
+        dryRun,
+        apiKey: apiKey ?? "",
+        apiSecret: apiSecret ?? "",
+      }),
+    })
+
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string
+      detail?: string
+      message?: string
+      setup?: {
+        server_ip?: string
+        backend_server_ip?: string
+        status?: string
+        last_step?: string
+        last_error?: string
+        history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
+      }
+    }
+
+    if (!res.ok) {
+      throw new Error(payload.error || payload.detail || payload.message || "Bot deployment failed")
+    }
+
+    return payload
   }
 
   const handleDeleteBot = async () => {
@@ -1782,37 +1822,14 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
 
       setExchangeConnectStage("switching")
 
-      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          strategyName: "ProfitPath",
-          dryRun: false,
-          apiKey,
-          apiSecret,
-        }),
-      })
-
-      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
-        error?: string
-        detail?: string
-        message?: string
-        setup?: {
-          status?: string
-          last_error?: string
-        }
-      }
-
-      if (!deployRes.ok) {
-        throw new Error(deployPayload.error || deployPayload.detail || deployPayload.message || "Failed to switch bot to live mode")
-      }
+      const deployPayload = await deployBotFlow({ dryRun: false, apiKey, apiSecret })
 
       setSetupMessage(`${exchangeLabel} connected. Bot switched to live mode and keys saved in Settings Connections.`)
       setSetupError(deployPayload.setup?.last_error || null)
       setExchangePanelOpen(false)
+      void refreshSetupState()
       refetchStats()
       refetchOpen()
-      window.location.reload()
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Failed to connect exchange")
     } finally {
@@ -1829,35 +1846,14 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     setSetupMessage(null)
 
     try {
-      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          strategyName: "ProfitPath",
-          dryRun: true,
-        }),
-      })
-
-      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
-        error?: string
-        detail?: string
-        message?: string
-        setup?: {
-          status?: string
-          last_error?: string
-        }
-      }
-
-      if (!deployRes.ok) {
-        throw new Error(deployPayload.error || deployPayload.detail || deployPayload.message || "Failed to switch bot to dry run mode")
-      }
+      const deployPayload = await deployBotFlow({ dryRun: true })
 
       setSetupMessage("Bot switched from live to dry run mode.")
       setSetupError(deployPayload.setup?.last_error || null)
       setSwitchToDryRunDialogOpen(false)
+      void refreshSetupState()
       refetchStats()
       refetchOpen()
-      window.location.reload()
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Failed to switch bot to dry run mode")
     } finally {
@@ -1947,44 +1943,16 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
         throw new Error(errorMsg)
       }
 
-      const deployRes = await fetch(`/api/subscription/bots/${encodeURIComponent(setupBotId)}/setup/deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          strategyName: "ProfitPath",
-          dryRun: !isBotLiveMode,
-        }),
-      })
+      const deployPayload = await deployBotFlow({ dryRun: !isBotLiveMode })
 
-      const deployPayload = (await deployRes.json().catch(() => ({}))) as {
-        error?: string
-        detail?: string
-        message?: string
-        setup?: {
-          last_error?: string
-        }
-      }
-
-      console.log("[Bot Settings] Deploy response:", { status: deployRes.status, payload: deployPayload })
-
-      if (!deployRes.ok) {
-        const errorMsg =
-          deployPayload.error ||
-          deployPayload.detail ||
-          deployPayload.message ||
-          (deployRes.status === 504
-            ? "Gateway timeout while applying bot settings. Please retry in a few seconds."
-            : `Failed to apply bot settings (HTTP ${deployRes.status})`)
-        console.error("[Bot Settings] Deploy failed:", errorMsg)
-        throw new Error(errorMsg)
-      }
+      console.log("[Bot Settings] Deploy response:", { status: "ok", payload: deployPayload })
 
       setSetupMessage("Bot settings saved, config/strategy updated, and bot restarted.")
       setSetupError(deployPayload.setup?.last_error || null)
       setSettingsPanelOpen(false)
+      void refreshSetupState()
       refetchStats()
       refetchOpen()
-      window.location.reload()
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to apply bot settings"
       console.error("[Bot Settings] Handler error:", errorMsg, err)
@@ -2031,9 +1999,11 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                 </div>
               )}
 
-              <Button className="mt-6 h-12 w-full rounded-xl bg-[#4a67ff] text-[15px] font-semibold text-white hover:bg-[#5771ff]">
-                <Rocket className="h-4 w-4" />
-                Buy Bot
+              <Button asChild className="mt-6 h-12 w-full rounded-xl bg-[#4a67ff] text-[15px] font-semibold text-white hover:bg-[#5771ff]">
+                <Link href="/new-bot">
+                  <Rocket className="h-4 w-4" />
+                  Buy Bot
+                </Link>
               </Button>
 
               <div data-name="my-bots-filters" className="mt-5 flex flex-wrap items-center gap-2">
@@ -2163,10 +2133,13 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
               <Button
                 type="button"
                 size="icon"
+                asChild
                 className="h-10 w-10 rounded-xl bg-[#4a67ff] text-white hover:bg-[#5771ff]"
                 aria-label="Buy bot"
               >
-                <Rocket className="h-4 w-4" />
+                <Link href="/new-bot">
+                  <Rocket className="h-4 w-4" />
+                </Link>
               </Button>
 
               <button
@@ -2277,7 +2250,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                 </div>}
               </div>
 
-              {false && !publicView && setupBotId && !isDeployCompleted && (
+              {!publicView && setupBotId && !isDeployCompleted && (
                 <div data-name="setup-pipeline-section" className="rounded-lg border border-border bg-card p-4">
                   <div data-name="setup-pipeline-header" className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div data-name="setup-pipeline-header-text">
@@ -2290,9 +2263,21 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                           : `Step 1 creates the server. Step 2 validates your ${botExchange} API. Step 3 deploys the bot.`}
                       </p>
                     </div>
-                    {setupState?.status === "completed" && (
-                      <Badge className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Setup Completed</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {setupState?.status === "completed" && (
+                        <Badge className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-300">Setup Completed</Badge>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-8 rounded-lg px-2 text-xs"
+                        onClick={() => void refreshSetupState()}
+                        disabled={setupInstallerLoading}
+                      >
+                        <RefreshCw className={cn("h-3.5 w-3.5", setupInstallerLoading && "animate-spin")} />
+                        Refresh Status
+                      </Button>
+                    </div>
                   </div>
 
                   <div data-name="setup-installer-steps" className={cn("mt-4 grid gap-2", showApiStep ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
@@ -2518,7 +2503,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                         <p className="mt-2 text-xs text-amber-300">{setupState?.deploy_unavailable_reason || "Deployment is currently unavailable."}</p>
                       )}
                       <div className="mt-4 flex justify-start">
-                        <Button type="button" variant="outline" className="h-9 rounded-lg" onClick={() => setPipelineStep(2)}>
+                        <Button type="button" variant="outline" className="h-9 rounded-lg" onClick={() => setPipelineStep(showApiStep ? 2 : 1)}>
                           Back
                         </Button>
                       </div>
@@ -3631,10 +3616,12 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
               </p>
               <div className="mt-6 rounded-lg border border-border bg-background p-4">
                 <p className="text-sm text-muted-foreground">Don&apos;t have a bot yet?</p>
-                <p className="mt-1 text-sm text-muted-foreground">Create one and trade up to $300,000 in simulated capital.</p>
-                <Button className="mt-4 h-11 w-full rounded-xl bg-[#4a67ff] text-white hover:bg-[#5874ff]">
-                  <Rocket className="h-4 w-4" />
-                  Buy Bot
+                <p className="mt-1 text-sm text-muted-foreground">Create a bot and aim for an average 20% monthly return.</p>
+                <Button asChild className="mt-4 h-11 w-full rounded-xl bg-[#4a67ff] text-white hover:bg-[#5874ff]">
+                  <Link href="/new-bot">
+                    <Rocket className="h-4 w-4" />
+                    Buy Bot
+                  </Link>
                 </Button>
               </div>
             </div>

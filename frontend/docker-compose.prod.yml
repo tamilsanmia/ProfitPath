@@ -5,7 +5,9 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
-    container_name: profitpath-prod
+    container_name: profitpath-dev
+    init: true
+    user: nextjs
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -19,6 +21,15 @@ services:
     networks:
       - default
       - backend_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /dev/shm:rw,noexec,nosuid,size=64m
+    pids_limit: 512
     restart: unless-stopped
 
   nginx:

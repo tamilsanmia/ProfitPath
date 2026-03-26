@@ -12,10 +12,10 @@ import { addBrowserLog } from "@/lib/browser-log";
 import { AVATAR_UPDATED_EVENT } from "@/lib/local-avatar";
 import {
   Bot,
-  CreditCard,
   LayoutDashboard,
   LineChart,
   LogOut,
+  Plus,
   Settings,
   Shield,
   UserPlus,
@@ -107,8 +107,6 @@ export function DashboardSidebar({ collapsed }: Props) {
       setActiveItem("my-bots");
     } else if (pathname.startsWith("/invite-friends")) {
       setActiveItem("invite-friends");
-    } else if (pathname.startsWith("/subscription")) {
-      setActiveItem("subscription");
     } else if (pathname.startsWith("/admin")) {
       setActiveItem("admin");
     } else if (pathname.startsWith("/settings")) {
@@ -263,7 +261,6 @@ export function DashboardSidebar({ collapsed }: Props) {
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
         { id: "my-bots", label: "My Bots", icon: LineChart, href: "/my-bots" },
         { id: "invite-friends", label: "Invite Friends", icon: UserPlus, href: "/invite-friends" },
-        { id: "subscription", label: "Subscription", icon: CreditCard, href: "/subscription" },
       ],
     },
   ];
@@ -291,8 +288,8 @@ export function DashboardSidebar({ collapsed }: Props) {
       {/* Sidebar */}
       <aside className={cn("fixed flex h-full flex-col border-r border-border bg-card transition-all duration-300 ease-in-out z-40", collapsed ? "w-[72px]" : " left-0 w-[240px]")}>
         {/* Header */}
-        <div className={cn("flex h-16 items-center py-4", collapsed ? "justify-center px-0" : "justify-center px-3")}>
-          <div className="flex items-center gap-2">
+        <div className={cn("flex items-center py-4", collapsed ? "h-auto justify-center px-0" : "h-16 justify-center px-3")}>
+          <div className={cn("flex", collapsed ? "flex-col items-center gap-2" : "items-center gap-2")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
               {activeLogoUrl ? (
                 <img src={activeLogoUrl} alt={siteBranding.siteTitle || "Site logo"} className="h-7 w-7 object-contain" />
@@ -300,6 +297,18 @@ export function DashboardSidebar({ collapsed }: Props) {
                 <Bot className="h-6 w-6 text-primary-foreground" />
               )}
             </div>
+            <Link
+              href="/new-bot"
+              aria-label="Create new bot"
+              title="Create new bot"
+              className="group"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-md pt-[30px]">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4a67ff] text-white transition-colors group-hover:bg-[#5b75ff]">
+                  <Plus className="h-5 w-5" />
+                </span>
+              </div>
+            </Link>
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="text-lg font-semibold tracking-tight">{siteBranding.siteTitle || "DefibotX"}</span>

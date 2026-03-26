@@ -4,13 +4,27 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrencyFromUsd } from "@/lib/currency-runtime";
 import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
+import { Slider } from "@/components/ui/slider";
 
 const EXCHANGES = ["binance", "bybit"] as const;
 const TRADE_TYPES = ["Fixed", "Compound"] as const;
 const DCA_OPTIONS = ["Enable", "Disable"] as const;
-const CAPITALS = [1000, 5000, 10000] as const;
+const RECOMMENDED_EXCHANGE = "binance" as const;
+const RECOMMENDED_CAPITAL = 1000;
+const RECOMMENDED_TRADE_TYPE = "Compound" as const;
+const RECOMMENDED_DCA_MODE = "Enable" as const;
+const RECOMMENDED_STAKE_AMOUNT = 100;
+const RECOMMENDED_MAX_OPEN_ORDER = 30;
+const CAPITAL_MIN = 100;
+const CAPITAL_MAX = 10000;
+const CAPITAL_STEP = 100;
 const BILLING_CYCLES = ["30 Days", "90 Days"] as const;
 const MONTHLY_SERVER_FEE = 10;
+const LEVERAGE_OPTIONS = ["5x", "7x", "10x", "15x"] as const;
+const RECOMMENDED_LEVERAGE = "5x" as const;
+const TIMEFRAMES = ["30m", "1h", "4h"] as const;
+type Timeframe = (typeof TIMEFRAMES)[number];
+const RECOMMENDED_TIMEFRAMES: readonly Timeframe[] = ["1h", "4h"];
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
 function usd(n: number, noSign = false) {
@@ -87,13 +101,22 @@ export function SubscriptionInterface() {
   useCurrencyRealtime();
 
   const router = useRouter();
-  const [exchange, setExchange] = useState<(typeof EXCHANGES)[number]>("binance");
-  const [tradeType, setTradeType] = useState<(typeof TRADE_TYPES)[number]>("Fixed");
-  const [dcaMode, setDcaMode] = useState<(typeof DCA_OPTIONS)[number]>("Enable");
-  const [capital, setCapital] = useState<(typeof CAPITALS)[number]>(1000);
-  const [stakeAmount, setStakeAmount] = useState<string>("");
-  const [maxOpenOrder, setMaxOpenOrder] = useState<number>(5);
+  const [exchange, setExchange] = useState<(typeof EXCHANGES)[number]>(RECOMMENDED_EXCHANGE);
+  const [tradeType, setTradeType] = useState<(typeof TRADE_TYPES)[number]>(RECOMMENDED_TRADE_TYPE);
+  const [dcaMode, setDcaMode] = useState<(typeof DCA_OPTIONS)[number]>(RECOMMENDED_DCA_MODE);
+  const [capital, setCapital] = useState<number>(RECOMMENDED_CAPITAL);
+  const [stakeAmount, setStakeAmount] = useState<number>(RECOMMENDED_STAKE_AMOUNT);
+  const [maxOpenOrder, setMaxOpenOrder] = useState<number>(RECOMMENDED_MAX_OPEN_ORDER);
+  const stakeAmountMax = Math.min(1000, capital);
   const [billingCycle, setBillingCycle] = useState<(typeof BILLING_CYCLES)[number]>("30 Days");
+  // Stoploss
+  const [stoploss, setStoploss] = useState<number>(99);
+  const [dcaStoploss, setDcaStoploss] = useState<number>(50);
+  // Leverage
+  const [leverage, setLeverage] = useState<(typeof LEVERAGE_OPTIONS)[number]>(RECOMMENDED_LEVERAGE);
+  // Entry Timeframes
+  const [enabledTimeframes, setEnabledTimeframes] = useState<Set<Timeframe>>(new Set(RECOMMENDED_TIMEFRAMES));
+  const toggleTimeframe = (tf: Timeframe) => setEnabledTimeframes(prev => { const s = new Set(prev); s.has(tf) ? s.delete(tf) : s.add(tf); return s; });
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -105,9 +128,13 @@ export function SubscriptionInterface() {
 
   useEffect(() => {
     if (tradeType !== "Fixed") {
-      setStakeAmount("");
+      setStakeAmount(RECOMMENDED_STAKE_AMOUNT);
     }
   }, [tradeType]);
+
+  useEffect(() => {
+    setStakeAmount((prev) => Math.min(prev, stakeAmountMax));
+  }, [stakeAmountMax]);
 
   const setupCharge = 0;
   const monthlyServerFee = MONTHLY_SERVER_FEE;
@@ -118,12 +145,9 @@ export function SubscriptionInterface() {
   const handleActivateBot = async () => {
     if (!agreed || isSubmitting) return;
 
-    if (tradeType === "Fixed") {
-      const parsedStake = Number(stakeAmount);
-      if (!Number.isFinite(parsedStake) || parsedStake <= 0) {
-        setSubmitError("Please enter a valid stake amount for Fixed trade type.");
-        return;
-      }
+    if (tradeType === "Fixed" && stakeAmount <= 0) {
+      setSubmitError("Please enter a valid stake amount for Fixed trade type.");
+      return;
     }
 
     setIsSubmitting(true);
@@ -143,10 +167,14 @@ export function SubscriptionInterface() {
           model: tradeType,
           trade_type: tradeType,
           dca_mode: dcaMode,
-          stake_amount: tradeType === "Fixed" ? Number(stakeAmount || 0) : null,
+          stake_amount: tradeType === "Fixed" ? stakeAmount : null,
           max_open_order: maxOpenOrder,
           capital_usdt: capital,
           billing_cycle_days: billingCycleDays,
+          stoploss_pct: stoploss,
+          dca_stoploss_pct: dcaStoploss,
+          leverage: leverage,
+          entry_timeframes: [...enabledTimeframes],
           setup_charge_usd: setupCharge,
           monthly_server_fee_usd: monthlyServerFee,
         }),
@@ -187,8 +215,8 @@ export function SubscriptionInterface() {
             FP
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Bot Subscription</h1>
-            <p className="text-xs text-slate-400">New Bot</p>
+            <h1 className="text-2xl font-bold text-white">New Bot</h1>
+            <p className="text-xs text-slate-400">Bot Setup</p>
           </div>
         </div>
 
@@ -200,16 +228,43 @@ export function SubscriptionInterface() {
             <Section dataName="subscription-section-exchange" title="1. Select Exchange" sub="Binance or Bybit">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {EXCHANGES.map(item => (
-                  <Radio key={item} label={item === "binance" ? "Binance" : "Bybit"} selected={exchange === item} onClick={() => setExchange(item)} />
+                  <Radio
+                    key={item}
+                    label={item === "binance" ? "Binance" : "Bybit"}
+                    badge={item === RECOMMENDED_EXCHANGE ? "Recommended" : null}
+                    badgeBlue={item === RECOMMENDED_EXCHANGE}
+                    selected={exchange === item}
+                    onClick={() => setExchange(item)}
+                  />
                 ))}
               </div>
             </Section>
 
             <Section dataName="subscription-section-capital" title="2. Select Capital (USDT)" sub="Choose your starting capital">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {CAPITALS.map(item => (
-                  <Radio key={item} label={`${usd(item, true)} USDT`} selected={capital === item} onClick={() => setCapital(item)} />
-                ))}
+              <div className="rounded-xl border border-[#1e3a5f] bg-[#0b1628] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs text-slate-400">Select Capital (USDT)</label>
+                  <div className="flex items-center gap-2">
+                    {capital === RECOMMENDED_CAPITAL && (
+                      <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                        Recommended
+                      </span>
+                    )}
+                    <span className="text-sm font-semibold text-white">{usd(capital, true)} USDT</span>
+                  </div>
+                </div>
+                <Slider
+                  min={CAPITAL_MIN}
+                  max={CAPITAL_MAX}
+                  step={CAPITAL_STEP}
+                  value={[capital]}
+                  onValueChange={([v]) => setCapital(v)}
+                  className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:bg-[#0b1628] [&_.relative]:h-2 [&_.absolute]:bg-blue-500 [&_.relative]:bg-[#1e3a5f]"
+                />
+                <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                  <span>{CAPITAL_MIN.toLocaleString()}</span>
+                  <span>{CAPITAL_MAX.toLocaleString()}</span>
+                </div>
               </div>
             </Section>
 
@@ -219,7 +274,14 @@ export function SubscriptionInterface() {
                   <label className="mb-2 block text-xs text-slate-400">Trade Type</label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {TRADE_TYPES.map(item => (
-                      <Radio key={item} label={item} selected={tradeType === item} onClick={() => setTradeType(item)} />
+                      <Radio
+                        key={item}
+                        label={item}
+                        badge={item === RECOMMENDED_TRADE_TYPE ? "Recommended" : null}
+                        badgeBlue={item === RECOMMENDED_TRADE_TYPE}
+                        selected={tradeType === item}
+                        onClick={() => setTradeType(item)}
+                      />
                     ))}
                   </div>
                 </div>
@@ -228,46 +290,150 @@ export function SubscriptionInterface() {
                   <label className="mb-2 block text-xs text-slate-400">DCA Mode</label>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {DCA_OPTIONS.map(item => (
-                      <Radio key={item} label={item} selected={dcaMode === item} onClick={() => setDcaMode(item)} />
+                      <Radio
+                        key={item}
+                        label={item}
+                        badge={item === RECOMMENDED_DCA_MODE ? "Recommended" : null}
+                        badgeBlue={item === RECOMMENDED_DCA_MODE}
+                        selected={dcaMode === item}
+                        onClick={() => setDcaMode(item)}
+                      />
                     ))}
                   </div>
                 </div>
 
                 {tradeType === "Fixed" && (
                   <div className="rounded-xl border border-[#1e3a5f] bg-[#0b1628] p-4">
-                    <label className="mb-2 block text-xs text-slate-400">Stake Amount (USDT)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      value={stakeAmount}
-                      onChange={e => setStakeAmount(e.target.value)}
-                      className="w-full rounded-lg border border-[#2a4f7f] bg-[#071224] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
-                      placeholder="Enter stake amount"
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs text-slate-400">Stake Amount (USDT)</label>
+                      <div className="flex items-center gap-2">
+                        {stakeAmount === RECOMMENDED_STAKE_AMOUNT && (
+                          <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                            Recommended
+                          </span>
+                        )}
+                        <span className="text-sm font-semibold text-white">{usd(stakeAmount, true)} USDT</span>
+                      </div>
+                    </div>
+                    <Slider
+                      min={1}
+                      max={stakeAmountMax}
+                      step={1}
+                      value={[stakeAmount]}
+                      onValueChange={([v]) => setStakeAmount(v)}
+                      className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:bg-[#0b1628] [&_.relative]:h-2 [&_.absolute]:bg-blue-500 [&_.relative]:bg-[#1e3a5f]"
                     />
+                    <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                      <span>1</span>
+                      <span>{stakeAmountMax.toLocaleString()}</span>
+                    </div>
                   </div>
                 )}
 
                 <div className="rounded-xl border border-[#1e3a5f] bg-[#0b1628] p-4">
-                  <label className="mb-2 block text-xs text-slate-400">Max Open Order</label>
-                  <input
-                    type="number"
-                    min="5"
-                    max="15"
-                    step="1"
-                    value={maxOpenOrder}
-                    onChange={e => {
-                      const next = Number(e.target.value);
-                      if (!Number.isFinite(next)) return;
-                      setMaxOpenOrder(Math.min(15, Math.max(5, Math.trunc(next))));
-                    }}
-                    className="w-full rounded-lg border border-[#2a4f7f] bg-[#071224] px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs text-slate-400">Max Open Order</label>
+                    <div className="flex items-center gap-2">
+                      {maxOpenOrder === RECOMMENDED_MAX_OPEN_ORDER && (
+                        <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
+                          Recommended
+                        </span>
+                      )}
+                      <span className="text-sm font-semibold text-white">{maxOpenOrder}</span>
+                    </div>
+                  </div>
+                  <Slider
+                    min={5}
+                    max={30}
+                    step={1}
+                    value={[maxOpenOrder]}
+                    onValueChange={([v]) => setMaxOpenOrder(v)}
+                    className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:bg-[#0b1628] [&_.relative]:h-2 [&_.absolute]:bg-blue-500 [&_.relative]:bg-[#1e3a5f]"
                   />
+                  <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                    <span>5</span>
+                    <span>30</span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">Max Open Order 30 is less profitable but more stable for compound trading.</p>
                 </div>
               </div>
             </Section>
 
-            <Section dataName="subscription-section-billing-cycle" title="4. Profit Share Billing Cycle" sub="Choose billing interval">
+            <Section dataName="subscription-section-stoploss" title="4. Stoploss Settings" sub="Configure stoploss percentages">
+              <div className="space-y-4">
+                {/* Stoploss */}
+                <div className="rounded-xl border border-[#1e3a5f] bg-[#0b1628] p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs text-slate-400">Stoploss %</label>
+                    <div className="flex items-center gap-2">
+                      {stoploss === 99 && <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">Recommended</span>}
+                      <span className="text-sm font-semibold text-white">{stoploss}%</span>
+                    </div>
+                  </div>
+                  <Slider min={1} max={100} step={1} value={[stoploss]} onValueChange={([v]) => setStoploss(v)}
+                    className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:bg-[#0b1628] [&_.relative]:h-2 [&_.absolute]:bg-blue-500 [&_.relative]:bg-[#1e3a5f]"
+                  />
+                  <div className="flex items-center justify-between mt-2 text-xs text-slate-500"><span>1%</span><span>100%</span></div>
+                </div>
+                {/* DCA Stoploss */}
+                <div className="rounded-xl border border-[#1e3a5f] bg-[#0b1628] p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs text-slate-400">DCA Stoploss %</label>
+                    <div className="flex items-center gap-2">
+                      {dcaStoploss === 50 && <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">Recommended</span>}
+                      <span className="text-sm font-semibold text-white">{dcaStoploss}%</span>
+                    </div>
+                  </div>
+                  <Slider min={1} max={100} step={1} value={[dcaStoploss]} onValueChange={([v]) => setDcaStoploss(v)}
+                    className="[&_[role=slider]]:h-5 [&_[role=slider]]:w-5 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:bg-[#0b1628] [&_.relative]:h-2 [&_.absolute]:bg-blue-500 [&_.relative]:bg-[#1e3a5f]"
+                  />
+                  <div className="flex items-center justify-between mt-2 text-xs text-slate-500"><span>1%</span><span>100%</span></div>
+                </div>
+              </div>
+            </Section>
+
+            <Section dataName="subscription-section-leverage" title="5. Leverage" sub="Select your trading leverage">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {LEVERAGE_OPTIONS.map(item => (
+                  <Radio
+                    key={item}
+                    label={item}
+                    badge={item === RECOMMENDED_LEVERAGE ? "Recommended" : null}
+                    badgeBlue={item === RECOMMENDED_LEVERAGE}
+                    selected={leverage === item}
+                    onClick={() => setLeverage(item)}
+                  />
+                ))}
+              </div>
+            </Section>
+
+            <Section dataName="subscription-section-timeframes" title="6. Entry Timeframes" sub="Recommended: 1h and 4h for stable performance">
+              <div className="space-y-3">
+                {TIMEFRAMES.map(tf => {
+                  const on = enabledTimeframes.has(tf);
+                  const rec = RECOMMENDED_TIMEFRAMES.includes(tf);
+                  return (
+                    <div key={tf} className={`flex items-center justify-between rounded-xl border px-4 py-3 transition-colors ${on ? "border-blue-500 bg-blue-500/10" : "border-[#1e3a5f] bg-[#0b1628]"}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-white">{tf}</span>
+                        {rec && <span className="rounded-full border border-blue-500/40 bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">Recommended</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleTimeframe(tf)}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${on ? "bg-blue-500" : "bg-slate-700"}`}
+                        aria-checked={on}
+                        role="switch"
+                      >
+                        <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${on ? "translate-x-5" : "translate-x-0"}`} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Section>
+
+            <Section dataName="subscription-section-billing-cycle" title="7. Profit Share Billing Cycle" sub="Choose billing interval">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {BILLING_CYCLES.map(item => (
                   <Radio key={item} label={item} selected={billingCycle === item} onClick={() => setBillingCycle(item)} />
@@ -297,7 +463,7 @@ export function SubscriptionInterface() {
                 {tradeType === "Fixed" && (
                   <div className="flex justify-between gap-3">
                     <span>Stake Amount</span>
-                    <span className="font-medium text-white">{stakeAmount ? `${usd(Number(stakeAmount), true)} USDT` : "Not set"}</span>
+                    <span className="font-medium text-white">{usd(stakeAmount, true)} USDT</span>
                   </div>
                 )}
                 <div className="flex justify-between gap-3">
@@ -307,6 +473,22 @@ export function SubscriptionInterface() {
                 <div className="flex justify-between gap-3">
                   <span>Max Open Order</span>
                   <span className="font-medium text-white">{maxOpenOrder}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Stoploss</span>
+                  <span className="font-medium text-white">{stoploss}%</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>DCA Stoploss</span>
+                  <span className="font-medium text-white">{dcaStoploss}%</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Leverage</span>
+                  <span className="font-medium text-white">{leverage}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span>Timeframes</span>
+                  <span className="font-medium text-white">{enabledTimeframes.size > 0 ? [...enabledTimeframes].join(", ") : "None"}</span>
                 </div>
                 <div className="flex justify-between gap-3">
                   <span>Profit Share Billing Cycle</span>
@@ -365,13 +547,14 @@ export function SubscriptionInterface() {
       </div>
 
       {provisioningPopupOpen && (
-        <div data-name="subscription-provisioning-popup" className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4">
+        <div data-name="subscription-provisioning-popup" className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 px-4 pb-6 sm:pb-10">
           <div className="w-full max-w-md rounded-2xl border border-[#1e3a5f] bg-[#0b1628] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
             {!provisioningComplete && !provisioningError && (
-              <div className="space-y-4">
+              <div className="space-y-4 text-center">
                 <p className="text-base font-semibold text-white">Payment Completed</p>
                 <p className="text-sm text-slate-300">Creating your server and deploying bot in demo mode...</p>
-                <div className="flex items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3">
+                <p className="text-xs text-slate-400">Please wait a few mins while we complete the setup.</p>
+                <div className="flex items-center justify-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3">
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-300 border-t-transparent" />
                   <span className="text-sm text-blue-200">Server creation in progress</span>
                 </div>

@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: Params) {
         body: JSON.stringify({
           email,
           session_token: sessionToken,
-          strategy_name: String(body.strategyName ?? "SampleStrategy"),
+          strategy_name: String(body.strategyName ?? "ProfitPath"),
           strategy_code: typeof body.strategyCode === "string" ? body.strategyCode : null,
           config_override: body.configOverride ?? null,
           dry_run: dryRun,

@@ -4,12 +4,15 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: profitpath-dev
+    init: true
+    user: node
     ports:
       - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: "1"
       CI: "true"
+      COREPACK_HOME: /home/node/.cache/corepack
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       BACKEND_URL: http://profitpath-backend:8000
       NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
@@ -17,13 +20,23 @@ services:
     networks:
       - default
       - backend_net
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /dev/shm:rw,noexec,nosuid,size=64m
+    pids_limit: 512
     volumes:
       - ./:/app
       - node_modules_cache:/app/node_modules
       - next_cache:/app/.next
+      - corepack_cache:/home/node/.cache
     command: >-
       sh -c "
-      if [ ! -d node_modules ] || [ -z \"$(ls -A node_modules 2>/dev/null)\" ]; then
+      if [ ! -d /app/node_modules/.bin ] || [ -z \"$(ls -A /app/node_modules/.bin 2>/dev/null)\" ]; then
         CI=true pnpm install --frozen-lockfile;
       fi &&
       pnpm dev --turbopack -H 0.0.0.0 -p 3000
@@ -68,6 +81,7 @@ services:
 volumes:
   node_modules_cache:
   next_cache:
+  corepack_cache:
   certbot_www:
   certbot_certs:
 
