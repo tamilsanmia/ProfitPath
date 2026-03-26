@@ -91,7 +91,7 @@ export const useInvitations = () => {
 
       window.dispatchEvent(new Event("pp-referrals-updated"))
 
-      const subject = encodeURIComponent("Join me on DefibotX")
+      const subject = encodeURIComponent("Join me on BotPrimeX")
       const composedMessage = referralLink ? `${formData.message}\n\n${referralLink}` : formData.message
       const body = encodeURIComponent(composedMessage)
       const bcc = encodeURIComponent(valid.join(","))

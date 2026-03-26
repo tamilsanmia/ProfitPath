@@ -64,7 +64,7 @@ export function InviteFriendsInterface() {
     <div data-name="invite-friends-interface" className="space-y-6">
       <div data-name="invite-friends-header">
         <h1 className="text-3xl font-bold tracking-tight">Invite Friends</h1>
-        <p className="text-muted-foreground mt-2">Invite your friends to DefibotX with your personal referral link</p>
+        <p className="text-muted-foreground mt-2">Invite your friends to BotPrimeX with your personal referral link</p>
       </div>
 
       <div data-name="invite-friends-cards" className="grid gap-6 md:grid-cols-2">

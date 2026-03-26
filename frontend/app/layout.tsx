@@ -8,7 +8,7 @@ import type React from "react";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ProfitPath - AI Crypto Trading Platform",
+  title: "BotPrimeX - AI Crypto Trading Platform",
   description: "Advanced AI-powered crypto trading",
 };
 

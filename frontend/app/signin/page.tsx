@@ -591,7 +591,7 @@ export default function SigninPage() {
     <div data-name="page-auth-signin" className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
       {preloader && (
         <div data-name="signin-preloader-overlay" className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#111827] px-4">
-          <p className="mb-8 text-[35px] font-bold tracking-tight text-white">ProfitPath</p>
+          <p className="mb-8 text-[35px] font-bold tracking-tight text-white">BotPrimeX</p>
           <div className="mb-8 h-8 w-8 animate-spin rounded-full border-[3px] border-white/20 border-t-white" />
           {preloader.status === "error" && (
             <div className="w-full max-w-[384px] rounded-[12px] border border-[#f59e0b]/40 bg-[#1e1a0a] px-5 py-4">
@@ -609,7 +609,7 @@ export default function SigninPage() {
       )}
       <div data-name="signin-container" className="mx-auto w-full max-w-[384px]">
         <div data-name="signin-brand-header" className="mb-9 text-center">
-          <p className="text-[35px] leading-none font-bold tracking-tight text-white">ProfitPath</p>
+          <p className="text-[35px] leading-none font-bold tracking-tight text-white">BotPrimeX</p>
         </div>
 
         <Card data-name="signin-card" className="border-0 bg-transparent shadow-none">

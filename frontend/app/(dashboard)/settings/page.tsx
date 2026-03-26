@@ -1,7 +1,7 @@
 import { SettingsInterface } from "@/components/settings-interface";
 
 export const metadata = {
-  title: "Settings | DefibotX",
+  title: "Settings | BotPrimeX",
   description: "Manage your account and platform settings",
 };
 

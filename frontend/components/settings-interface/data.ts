@@ -184,17 +184,17 @@ export const defaultDataSettings: DataSettings = {
 }
 
 export const defaultAdminSiteSettings: AdminSiteSettings = {
-  siteName: "DefibotX",
+  siteName: "BotPrimeX",
   tagline: "AI Trading",
   logoUrl: "",
   faviconUrl: "",
-  footerText: "Trade smarter with DefibotX.",
+  footerText: "Trade smarter with BotPrimeX.",
   registrationsOpen: true,
   subscriptionsOpen: true,
   readOnlyApi: false,
   announcementEnabled: false,
   announcementMessage: "",
-  supportEmail: "support@defibotx.com",
+  supportEmail: "support@botprimex.com",
   maxBotsPerUser: 5,
 }
 

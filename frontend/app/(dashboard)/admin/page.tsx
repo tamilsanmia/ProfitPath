@@ -1,7 +1,7 @@
 import { AdminInterface } from "@/components/admin-interface";
 
 export const metadata = {
-  title: "Admin | DefibotX",
+  title: "Admin | BotPrimeX",
   description: "Admin site management",
 };
 

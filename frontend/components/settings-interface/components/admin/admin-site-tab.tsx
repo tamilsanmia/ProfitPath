@@ -37,7 +37,7 @@ export const AdminSiteTab: React.FC<AdminSiteTabProps> = ({ adminSite, onAdminSi
               id="admin-site-name"
               value={adminSite.siteName}
               onChange={(event) => onAdminSiteChange({ siteName: event.target.value })}
-              placeholder="DefibotX"
+              placeholder="BotPrimeX"
             />
           </div>
 
@@ -77,7 +77,7 @@ export const AdminSiteTab: React.FC<AdminSiteTabProps> = ({ adminSite, onAdminSi
               id="admin-site-footer-text"
               value={adminSite.footerText}
               onChange={(event) => onAdminSiteChange({ footerText: event.target.value })}
-              placeholder="Trade smarter with DefibotX."
+              placeholder="Trade smarter with BotPrimeX."
               rows={2}
             />
           </div>
@@ -166,7 +166,7 @@ export const AdminSiteTab: React.FC<AdminSiteTabProps> = ({ adminSite, onAdminSi
               type="email"
               value={adminSite.supportEmail}
               onChange={(event) => onAdminSiteChange({ supportEmail: event.target.value })}
-              placeholder="support@defibotx.com"
+              placeholder="support@botprimex.com"
             />
           </div>
 

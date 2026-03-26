@@ -10,12 +10,12 @@ export const SOCIAL_PLATFORMS: SocialPlatform[] = [
 ]
 
 export const DEFAULT_REFERRAL_MESSAGE =
-  "Join me on DefibotX, the AI-powered crypto trading platform. Use my referral link to get started."
+  "Join me on BotPrimeX, the AI-powered crypto trading platform. Use my referral link to get started."
 
 export const REFERRAL_TIPS = [
   {
     title: "Personalize Your Invitations",
-    description: "Add a personal touch to your invitations. Explain why you use DefibotX and how it has helped you.",
+    description: "Add a personal touch to your invitations. Explain why you use BotPrimeX and how it has helped you.",
   },
   {
     title: "Target the Right Audience",
@@ -25,7 +25,7 @@ export const REFERRAL_TIPS = [
   {
     title: "Share Your Success Stories",
     description:
-      "Include specific examples of how DefibotX has improved your trading or helped you discover opportunities.",
+      "Include specific examples of how BotPrimeX has improved your trading or helped you discover opportunities.",
   },
   {
     title: "Follow Up",

@@ -43,7 +43,7 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
     <p style="margin:20px 0 10px; text-align:center;">
       <a href="#" style="display:inline-block; background:#0b63f6; color:#ffffff; text-decoration:none; padding:10px 18px; border-radius:6px; font-weight:600;">Action Button</a>
     </p>
-    <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">Kind regards,<br><strong>${value.fromName || "ProfitPath"} Team</strong></p>
+    <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">Kind regards,<br><strong>${value.fromName || "BotPrimeX"} Team</strong></p>
   `;
 
   const previewHtml = useMemo(() => {
@@ -136,7 +136,7 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
                 id="from-name"
                 value={value.fromName}
                 onChange={(e) => onChange({ fromName: e.target.value })}
-                placeholder="e.g., DefibotX"
+                placeholder="e.g., BotPrimeX"
               />
             </div>
             <div className="space-y-2">

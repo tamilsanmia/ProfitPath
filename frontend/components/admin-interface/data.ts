@@ -195,9 +195,9 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 
 export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
   general: {
-    siteTitle: "DefibotX",
+    siteTitle: "BotPrimeX",
     tagline: "AI Trading",
-    companyName: "DefibotX",
+    companyName: "BotPrimeX",
     companyMainDomain: "https://snowsig.com/",
     companyLogoLightUrl: "",
     companyLogoDarkUrl: "",
@@ -205,7 +205,7 @@ export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
     allowedFileTypes: ".png, .jpg, .jpeg, .svg, .webp, .ico",
   },
   companyInformation: {
-    companyName: "DefibotX",
+    companyName: "BotPrimeX",
     address: "",
     city: "",
     state: "",
@@ -223,9 +223,9 @@ export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
   },
   email: {
     provider: "smtp",
-    fromName: "DefibotX",
-    fromEmail: "support@defibotx.com",
-    replyTo: "support@defibotx.com",
+    fromName: "BotPrimeX",
+    fromEmail: "support@botprimex.com",
+    replyTo: "support@botprimex.com",
     smtpHost: "",
     smtpPort: 587,
     smtpProtocol: "SMTP",

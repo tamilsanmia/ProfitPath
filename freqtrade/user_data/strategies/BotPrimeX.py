@@ -25,7 +25,7 @@ import pandas as pd
 
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
-class ProfitPath(IStrategy):
+class BotPrimeX(IStrategy):
 
     # Core trade behavior
     exit_profit_only = True

@@ -78,7 +78,7 @@ app.include_router(freqtrade_router)
 os.makedirs(settings.profile_pictures_dir, exist_ok=True)
 app.mount("/media/profile-pictures", StaticFiles(directory=settings.profile_pictures_dir), name="profile-pictures")
 
-logger = logging.getLogger("profitpath.api")
+logger = logging.getLogger("botprimex.api")
 
 
 class UserCreatePayload(BaseModel):
@@ -373,7 +373,7 @@ def _normalize_admin_company_information(settings_payload: dict) -> dict:
         "companyName": _clean_settings_text(company_info.get("companyName"))
         or _clean_settings_text(admin_site.get("companyName"))
         or _clean_settings_text(general.get("companyName"))
-        or "DefibotX",
+        or "BotPrimeX",
         "address": _clean_settings_text(company_info.get("address"))
         or _clean_settings_text(admin_site.get("address"))
         or "",
@@ -539,7 +539,7 @@ class ValidateBinanceSetupPayload(BaseModel):
 class DeployBotSetupPayload(BaseModel):
     email: EmailStr
     session_token: str
-    strategy_name: str = "ProfitPath"
+    strategy_name: str = "BotPrimeX"
     strategy_code: str | None = None
     config_override: dict[str, Any] | None = None
     dry_run: bool | None = None
@@ -622,7 +622,7 @@ def _build_smtp_config_from_admin_settings(user_id: int) -> dict[str, Any] | Non
         "charset": str(email_settings.get("emailCharset") or "UTF-8").strip() or "UTF-8",
         "predefinedHeader": str(email_settings.get("predefinedHeader") or ""),
         "predefinedFooter": str(email_settings.get("predefinedFooter") or ""),
-        "companyName": str(general_settings.get("companyName") or general_settings.get("siteTitle") or "ProfitPath").strip() or "ProfitPath",
+        "companyName": str(general_settings.get("companyName") or general_settings.get("siteTitle") or "BotPrimeX").strip() or "BotPrimeX",
         "logoUrl": str(general_settings.get("companyLogoLightUrl") or general_settings.get("companyLogoDarkUrl") or "").strip(),
     }
 
@@ -882,9 +882,9 @@ def _cleanup_legacy_strategy_settings_for_user(user_id: int) -> list[str]:
 def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     metadata = _setup_metadata(bot_row)
 
-    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(metadata.get("strategy_name") or "").strip() or "ProfitPath")
+    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(metadata.get("strategy_name") or "").strip() or "BotPrimeX")
     if not strategy_name:
-        strategy_name = "ProfitPath"
+        strategy_name = "BotPrimeX"
 
     trade_type = _normalize_trade_type(str(metadata.get("trade_type") or bot_row.get("model") or "compound"))
     dca_enabled = _is_dca_enabled(str(metadata.get("dca_mode") or "Disable"))
@@ -1952,7 +1952,7 @@ def _deploy_freqtrade_bundle(
     dca_reentry_max_drawdown: float,
     reset_user_data: bool = False,
 ) -> dict[str, Any]:
-    deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/profitpath-freqtrade").strip() or "/opt/profitpath-freqtrade"
+    deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/botprimex-freqtrade").strip() or "/opt/botprimex-freqtrade"
     image = str(settings.freqtrade_deploy_image or "freqtradeorg/freqtrade:stable").strip() or "freqtradeorg/freqtrade:stable"
     api_port = int(settings.freqtrade_deploy_api_port or 18080)
 
@@ -2590,9 +2590,9 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
 
     account_type = _normalize_account_type(payload.account_type or "demo")
     trade_type = _normalize_trade_type(payload.trade_type or payload.model)
-    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(payload.strategy_name or "").strip() or "ProfitPath")
+    strategy_name = re.sub(r"[^A-Za-z0-9_]", "", str(payload.strategy_name or "").strip() or "BotPrimeX")
     if not strategy_name:
-        strategy_name = "ProfitPath"
+        strategy_name = "BotPrimeX"
     dca_mode = str(payload.dca_mode or "Disable").strip() or "Disable"
     dca_enabled = _is_dca_enabled(dca_mode)
 
@@ -3069,7 +3069,7 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
 
     account_type = _normalize_account_type(str(metadata.get("account_type") or "real"))
     strategy_settings = _normalize_strategy_settings(bot_row)
-    preferred_strategy_name = str(strategy_settings.get("strategy_name") or "").strip() or "ProfitPath"
+    preferred_strategy_name = str(strategy_settings.get("strategy_name") or "").strip() or "BotPrimeX"
     requested_strategy_name = str(payload.strategy_name or "").strip() or preferred_strategy_name
     trade_type = str(strategy_settings["trade_type"])
     dca_enabled = bool(strategy_settings["dca_enabled"])
@@ -3323,7 +3323,7 @@ def delete_subscription_bot(bot_id: str, payload: EmailSessionPayload) -> dict[s
     cleanup_warnings: list[str] = []
     if server_ip:
         container_name = f"pp-freqtrade-{bot_id[-8:]}"
-        deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/profitpath-freqtrade").strip() or "/opt/profitpath-freqtrade"
+        deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/botprimex-freqtrade").strip() or "/opt/botprimex-freqtrade"
         try:
             _run_remote_command(server_ip, f"docker rm -f {shlex.quote(container_name)} >/dev/null 2>&1 || true", timeout=120)
             _run_remote_command(

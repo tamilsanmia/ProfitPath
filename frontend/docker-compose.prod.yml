@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
-    container_name: profitpath-dev
+    container_name: botprimex-dev
     init: true
     user: nextjs
     ports:
@@ -15,7 +15,7 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       HOSTNAME: "0.0.0.0"
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      BACKEND_URL: http://profitpath-backend:8000
+      BACKEND_URL: http://botprimex-backend:8000
       NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     networks:
@@ -34,7 +34,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
-    container_name: profitpath-nginx
+    container_name: botprimex-nginx
     depends_on:
       - app
     ports:
@@ -50,7 +50,7 @@ services:
 
   certbot-renew:
     image: certbot/certbot:latest
-    container_name: profitpath-certbot-renew
+    container_name: botprimex-certbot-renew
     depends_on:
       - nginx
     volumes:

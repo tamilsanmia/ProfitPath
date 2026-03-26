@@ -1,5 +1,5 @@
 export const generateReferralLink = (userId: string): string => {
-  return `https://defibotx.io/ref/${userId}`
+  return `https://botprimex.io/ref/${userId}`
 }
 
 export const generateQRCodeUrl = (data: string): string => {

@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "ProfitPath Backend"
+    app_name: str = "BotPrimeX Backend"
     docker_socket: str = "unix://var/run/docker.sock"
     postgres_url: str = "postgresql://postgres:postgres@postgres:5432/profitpath"
     redis_url: str = "redis://redis:6379/0"
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "no-reply@profitpath.local"
+    smtp_from: str = "no-reply@botprimex.com"
     smtp_starttls: bool = False
     smtp_ssl: bool = False
 
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     deploy_ssh_user: str = "root"
     deploy_ssh_port: int = 22
     deploy_ssh_private_key_path: str = ""
-    freqtrade_deploy_dir: str = "/opt/profitpath-freqtrade"
+    freqtrade_deploy_dir: str = "/opt/botprimex-freqtrade"
     freqtrade_deploy_image: str = "freqtradeorg/freqtrade:stable"
     freqtrade_deploy_api_port: int = 18080
 

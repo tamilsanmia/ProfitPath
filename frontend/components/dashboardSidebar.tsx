@@ -90,7 +90,7 @@ export function DashboardSidebar({ collapsed }: Props) {
   } | null>(null);
   const [avatarSrc, setAvatarSrc] = useState<string | null>(null);
   const [siteBranding, setSiteBranding] = useState({
-    siteTitle: "DefibotX",
+    siteTitle: "BotPrimeX",
     tagline: "AI Trading",
     companyLogoLightUrl: "",
     companyLogoDarkUrl: "",
@@ -230,7 +230,7 @@ export function DashboardSidebar({ collapsed }: Props) {
       return;
     }
 
-    const titleBase = siteBranding.siteTitle || "DefibotX";
+    const titleBase = siteBranding.siteTitle || "BotPrimeX";
     const titleSuffix = siteBranding.tagline ? ` - ${siteBranding.tagline}` : "";
     document.title = `${titleBase}${titleSuffix}`;
 
@@ -311,7 +311,7 @@ export function DashboardSidebar({ collapsed }: Props) {
             </Link>
             {!collapsed && (
               <div className="flex flex-col">
-                <span className="text-lg font-semibold tracking-tight">{siteBranding.siteTitle || "DefibotX"}</span>
+                <span className="text-lg font-semibold tracking-tight">{siteBranding.siteTitle || "BotPrimeX"}</span>
                 <span className="text-xs text-muted-foreground">{siteBranding.tagline || "AI Trading"}</span>
               </div>
             )}

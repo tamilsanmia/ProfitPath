@@ -19,7 +19,7 @@ This backend powers authentication, user/profile data, settings, and Freqtrade b
 ## Local Run (without Docker Compose)
 
 ```bash
-cd /root/ProfitPath/backend
+cd /root/BotPrimeX/backend
 python -m venv .venv
 source .venv/bin/activate
 pip install --no-cache-dir -r requirements.txt
@@ -29,14 +29,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ## Run With Docker Compose
 
 ```bash
-cd /root/ProfitPath/backend
+cd /root/BotPrimeX/backend
 docker compose up --build -d
 ```
 
 Services:
 
 - Backend: `http://localhost:8000`
-- Postgres: `postgresql://postgres:postgres@localhost:5432/profitpath`
+- Postgres: `postgresql://postgres:postgres@localhost:5432/botprimex`
 - Redis: `redis://localhost:6379/0`
 - Mailpit UI: `http://localhost:8025`
 

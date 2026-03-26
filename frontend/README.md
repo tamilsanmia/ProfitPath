@@ -1,6 +1,6 @@
 # Frontend (Next.js 15 + TypeScript)
 
-This is the web app for ProfitPath, built with Next.js App Router, React 19, Tailwind, and shadcn/ui components.
+This is the web app for BotPrimeX, built with Next.js App Router, React 19, Tailwind, and shadcn/ui components.
 
 ## Prerequisites
 
@@ -11,7 +11,7 @@ This is the web app for ProfitPath, built with Next.js App Router, React 19, Tai
 ## Local Development
 
 ```bash
-cd /root/ProfitPath/frontend
+cd /root/BotPrimeX/frontend
 corepack enable
 pnpm install --frozen-lockfile
 BACKEND_URL=http://localhost:8000 pnpm dev -H 0.0.0.0 -p 3000
@@ -22,7 +22,7 @@ App URL: `http://localhost:3000`
 ## Build and Run (Production)
 
 ```bash
-cd /root/ProfitPath/frontend
+cd /root/BotPrimeX/frontend
 pnpm install --frozen-lockfile
 pnpm build
 pnpm start
@@ -33,14 +33,14 @@ pnpm start
 Development stack (Next.js dev server + nginx + certbot services):
 
 ```bash
-cd /root/ProfitPath/frontend
+cd /root/BotPrimeX/frontend
 docker compose -f docker-compose.dev.yml up --build -d
 ```
 
 Production frontend container only:
 
 ```bash
-cd /root/ProfitPath/frontend
+cd /root/BotPrimeX/frontend
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
@@ -63,6 +63,6 @@ docker compose -f docker-compose.prod.yml up --build -d
 ## Lint
 
 ```bash
-cd /root/ProfitPath/frontend
+cd /root/BotPrimeX/frontend
 pnpm lint
 ```

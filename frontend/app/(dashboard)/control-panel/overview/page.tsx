@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Overview | DefibotX",
+  title: "Overview | BotPrimeX",
   description: "Advanced AI-powered trading bot for cryptocurrency markets",
 };
 

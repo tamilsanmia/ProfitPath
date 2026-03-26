@@ -1007,9 +1007,9 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
   }, [setupError, setupState?.backend_server_ip, setupState?.last_error])
 
   const setupHistory = setupState?.history ?? []
-  const selectedStrategyName = String(setupState?.strategy_settings?.strategy_name || "ProfitPath")
+  const selectedStrategyName = String(setupState?.strategy_settings?.strategy_name || "BotPrimeX")
     .replace(/[^A-Za-z0-9_]/g, "")
-    || "ProfitPath"
+    || "BotPrimeX"
   const bot = publicView ? publicBot : bots.find((b) => b.id === selectedId) ?? null
   const displayBotId = bot?.id || selectedId || "-"
 

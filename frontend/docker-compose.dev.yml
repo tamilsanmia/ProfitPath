@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    container_name: profitpath-dev
+    container_name: botprimex-dev
     init: true
     user: node
     ports:
@@ -44,7 +44,7 @@ services:
 
   nginx:
     image: nginx:1.27-alpine
-    container_name: profitpath-nginx
+    container_name: botprimex-nginx
     depends_on:
       - app
     ports:
@@ -60,14 +60,14 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    container_name: profitpath-certbot
+    container_name: botprimex-certbot
     volumes:
       - certbot_www:/var/www/certbot
       - certbot_certs:/etc/letsencrypt
 
   certbot-renew:
     image: certbot/certbot:latest
-    container_name: profitpath-certbot-renew
+    container_name: botprimex-certbot-renew
     depends_on:
       - nginx
     volumes:

@@ -1,7 +1,7 @@
 import { SubscriptionInterface } from "@/components/subscription-interface/index";
 
 export const metadata = {
-  title: "New Bot | DefibotX",
+  title: "New Bot | BotPrimeX",
   description: "Advanced AI-powered trading bot for cryptocurrency markets",
 };
 

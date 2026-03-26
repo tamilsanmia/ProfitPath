@@ -1,7 +1,7 @@
 import { MyBotsPage } from "@/components/my-bots"
 
 export const metadata = {
-  title: "Shared Bot Dashboard | DefibotX",
+  title: "Shared Bot Dashboard | BotPrimeX",
   description: "View shared bot performance and details.",
 }
 

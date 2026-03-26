@@ -1,4 +1,4 @@
-export const AVATAR_STORAGE_PREFIX = "defibotx-avatar:"
+export const AVATAR_STORAGE_PREFIX = "botprimex-avatar:"
 export const AVATAR_UPDATED_EVENT = "pp:avatar-updated"
 
 type AvatarUpdatedDetail = {

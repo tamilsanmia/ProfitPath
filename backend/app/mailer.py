@@ -7,7 +7,7 @@ from typing import Any
 from .settings import settings
 
 
-logger = logging.getLogger("profitpath.mailer")
+logger = logging.getLogger("botprimex.mailer")
 
 
 DEFAULT_PREDEFINED_HEADER = """<!DOCTYPE html>
@@ -166,7 +166,7 @@ def _apply_template_tokens(template: str, company_name: str, logo_url: str) -> s
 
 def _build_wrapped_html(content_html: str, config: dict[str, Any] | None = None) -> str:
     cfg = config or {}
-    company_name = str(cfg.get("companyName") or "ProfitPath").strip() or "ProfitPath"
+    company_name = str(cfg.get("companyName") or "BotPrimeX").strip() or "BotPrimeX"
     logo_url = str(cfg.get("logoUrl") or "").strip()
     predefined_header = str(cfg.get("predefinedHeader") or "")
     predefined_footer = str(cfg.get("predefinedFooter") or "")
@@ -339,12 +339,12 @@ def send_test_email(to_email: str, smtp_config: dict[str, Any]) -> None:
         bool(runtime_config["username"]),
     )
 
-    subject = "ProfitPath Email Configuration Test"
+    subject = "BotPrimeX Email Configuration Test"
     body = (
-        "This is a test email from ProfitPath.\n\n"
+        "This is a test email from BotPrimeX.\n\n"
         "If you received this email, your SMTP settings are configured correctly.\n\n"
         "Best regards,\n"
-        "ProfitPath Team"
+        "BotPrimeX Team"
     )
 
     try:
@@ -354,9 +354,9 @@ def send_test_email(to_email: str, smtp_config: dict[str, Any]) -> None:
             text_body=body,
             title="Email Configuration Test",
             paragraphs=[
-                "This is a test email from ProfitPath.",
+                "This is a test email from BotPrimeX.",
                 "If you received this email, your SMTP settings are configured correctly.",
-                "Best regards,<br>ProfitPath Team",
+                "Best regards,<br>BotPrimeX Team",
             ],
             smtp_config=smtp_config,
         )
@@ -393,7 +393,7 @@ def send_test_email(to_email: str, smtp_config: dict[str, Any]) -> None:
 
 
 def send_reset_email(to_email: str, reset_link: str) -> None:
-    subject = "Reset your ProfitPath password"
+    subject = "Reset your BotPrimeX password"
     body = (
         "We received a request to reset your password.\n\n"
         f"Reset link: {reset_link}\n\n"

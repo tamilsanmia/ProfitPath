@@ -11,7 +11,7 @@ type SessionUser = {
 };
 
 export const metadata = {
-  title: "Profile | DefibotX",
+  title: "Profile | BotPrimeX",
   description: "Your account profile details",
 };
 

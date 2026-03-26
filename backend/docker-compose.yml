@@ -3,15 +3,15 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: profitpath-backend
+    container_name: botprimex-backend
     ports:
       - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
-      BACKEND_APP_NAME: ${BACKEND_APP_NAME:-ProfitPath Backend}
+      BACKEND_APP_NAME: ${BACKEND_APP_NAME:-BotPrimeX Backend}
       BACKEND_DOCKER_SOCKET: ${BACKEND_DOCKER_SOCKET:-unix://var/run/docker.sock}
-      BACKEND_POSTGRES_URL: ${BACKEND_POSTGRES_URL:-postgresql://postgres:postgres@postgres:5432/profitpath}
+      BACKEND_POSTGRES_URL: ${BACKEND_POSTGRES_URL:-postgresql://postgres:postgres@postgres:5432/botprimex}
       BACKEND_REDIS_URL: ${BACKEND_REDIS_URL:-redis://redis:6379/0}
       BACKEND_FRONTEND_URL: ${BACKEND_FRONTEND_URL:-http://localhost:3000}
       BACKEND_GOOGLE_CLIENT_ID: ${BACKEND_GOOGLE_CLIENT_ID:-}
@@ -19,7 +19,7 @@ services:
       BACKEND_SMTP_PORT: ${BACKEND_SMTP_PORT:-1025}
       BACKEND_SMTP_USER: ${BACKEND_SMTP_USER:-}
       BACKEND_SMTP_PASSWORD: ${BACKEND_SMTP_PASSWORD:-}
-      BACKEND_SMTP_FROM: ${BACKEND_SMTP_FROM:-no-reply@profitpath.local}
+      BACKEND_SMTP_FROM: ${BACKEND_SMTP_FROM:-no-reply@botprimex.local}
       BACKEND_SMTP_STARTTLS: ${BACKEND_SMTP_STARTTLS:-false}
       BACKEND_SMTP_SSL: ${BACKEND_SMTP_SSL:-false}
       BACKEND_RESET_TOKEN_TTL_MINUTES: ${BACKEND_RESET_TOKEN_TTL_MINUTES:-30}
@@ -40,15 +40,15 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: profitpath-postgres
+    container_name: botprimex-postgres
     environment:
-      POSTGRES_DB: profitpath
+      POSTGRES_DB: botprimex
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d profitpath"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d botprimex"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -56,7 +56,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: profitpath-redis
+    container_name: botprimex-redis
     volumes:
       - redis_data:/data
     command: ["redis-server", "--appendonly", "yes"]
@@ -69,7 +69,7 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: profitpath-mailpit
+    container_name: botprimex-mailpit
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"

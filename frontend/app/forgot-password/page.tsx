@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
     <div data-name="page-auth-forgot-password" className="min-h-screen bg-[#111827] text-white px-4 py-10 flex items-center justify-center">
       <div data-name="forgot-password-container" className="mx-auto w-full max-w-[384px]">
       <div data-name="forgot-password-brand-header" className="mb-9 text-center">
-        <p className="text-[35px] leading-none font-bold tracking-tight text-white">ProfitPath</p>
+        <p className="text-[35px] leading-none font-bold tracking-tight text-white">BotPrimeX</p>
       </div>
       <Card data-name="forgot-password-card" className="border-0 bg-transparent shadow-none">
         <CardHeader className="px-0 pt-0">
