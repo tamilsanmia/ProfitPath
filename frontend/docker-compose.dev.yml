@@ -14,8 +14,8 @@ services:
       CI: "true"
       COREPACK_HOME: /home/node/.cache/corepack
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      BACKEND_URL: http://profitpath-backend:8000
-      NEXT_PUBLIC_APP_URL: https://dev.freqai.pro
+      BACKEND_URL: http://188.245.195.207:8000
+      NEXT_PUBLIC_APP_URL: https://botprimex.com
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
     networks:
       - default
