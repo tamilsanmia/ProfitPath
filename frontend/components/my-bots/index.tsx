@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -507,7 +508,7 @@ function BotSummaryCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <img src={favicon} alt={exchangeName} className="h-[18px] w-[18px] rounded-sm" />
+              <Image src={favicon} alt={exchangeName} width={18} height={18} className="h-[18px] w-[18px] rounded-sm" unoptimized />
               <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
             </div>
           </div>
@@ -574,7 +575,7 @@ function BotSummaryCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
-              <img src={favicon} alt={exchangeName} className="h-[18px] w-[18px] rounded-sm" />
+              <Image src={favicon} alt={exchangeName} width={18} height={18} className="h-[18px] w-[18px] rounded-sm" unoptimized />
               <p className="text-[16px] font-semibold text-white">{fmtBotDisplayId(bot.id)}</p>
             </div>
           </div>

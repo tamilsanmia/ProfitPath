@@ -522,6 +522,7 @@ export default function SigninPage() {
       }
       script.onload = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientDevice, clientLocation, clientPublicIp, googleClientId, router]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {

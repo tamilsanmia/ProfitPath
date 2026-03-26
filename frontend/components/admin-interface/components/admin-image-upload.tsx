@@ -1,6 +1,8 @@
 "use client";
 
 import type React from "react";
+import Image from "next/image";
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +91,7 @@ export const AdminImageUpload: React.FC<AdminImageUploadProps> = ({
         <div className="flex items-center gap-4">
           <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted/30">
             {hasValue ? (
-              <img src={value} alt={label} className="h-full w-full object-contain" />
+              <Image src={value} alt={label} width={80} height={80} className="h-full w-full object-contain" unoptimized />
             ) : (
               <ImagePlus className="h-8 w-8 text-muted-foreground" />
             )}

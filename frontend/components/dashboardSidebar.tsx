@@ -21,6 +21,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
@@ -292,7 +293,7 @@ export function DashboardSidebar({ collapsed }: Props) {
           <div className={cn("flex", collapsed ? "flex-col items-center gap-2" : "items-center gap-2")}>
             <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary">
               {activeLogoUrl ? (
-                <img src={activeLogoUrl} alt={siteBranding.siteTitle || "Site logo"} className="h-7 w-7 object-contain" />
+                <Image src={activeLogoUrl} alt={siteBranding.siteTitle || "Site logo"} width={28} height={28} className="h-7 w-7 object-contain" unoptimized />
               ) : (
                 <Bot className="h-6 w-6 text-primary-foreground" />
               )}

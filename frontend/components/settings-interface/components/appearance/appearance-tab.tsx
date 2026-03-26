@@ -18,7 +18,7 @@ interface AppearanceTabProps {
 export const AppearanceTab: React.FC<AppearanceTabProps> = ({ appearance, onAppearanceChange }) => {
   const t = createSettingsTranslator(appearance.language)
 
-  const previewNow = useMemo(() => new Date(), [appearance.language, appearance.timezone, appearance.dateFormat, appearance.timeFormat])
+  const previewNow = useMemo(() => new Date(), [])
 
   const locale = useMemo(() => {
     const map: Record<string, string> = {

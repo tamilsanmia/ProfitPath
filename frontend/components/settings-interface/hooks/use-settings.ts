@@ -521,7 +521,7 @@ export const useSettings = () => {
     } finally {
       setIsSaving(false)
     }
-  }, [sessionEmail, settings])
+  }, [settings])
 
   const resetSettings = useCallback(() => {
     setSettings(deepClone(originalSettings))

@@ -34,7 +34,8 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
   const [showPreview, setShowPreview] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const SAMPLE_CONTENT = `
+  const previewHtml = useMemo(() => {
+    const sampleContent = `
     <p style="margin:0 0 12px; text-align:center; font-size:18px; font-weight:600; color:#111827;">Hi John Doe</p>
     <hr style="border:0; border-bottom:1px solid #e5e7eb; margin:16px 0 22px;">
     <h1 style="margin:0 0 16px; font-size:32px; line-height:1.15; color:#0f172a; font-weight:700; text-align:center;">Notification Title</h1>
@@ -45,11 +46,9 @@ export const EmailSection: React.FC<EmailSectionProps> = ({ value, onChange }) =
     </p>
     <p style="margin:0 0 14px; font-size:16px; line-height:1.7; color:#334155;">Kind regards,<br><strong>${value.fromName || "BotPrimeX"} Team</strong></p>
   `;
-
-  const previewHtml = useMemo(() => {
     const header = value.predefinedHeader || "";
     const footer = value.predefinedFooter || "";
-    return header + SAMPLE_CONTENT + footer;
+    return header + sampleContent + footer;
   }, [value.predefinedHeader, value.predefinedFooter, value.fromName]);
 
   useEffect(() => {
