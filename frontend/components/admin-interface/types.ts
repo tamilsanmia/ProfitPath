@@ -80,7 +80,8 @@ export type AdminSection = {
     | "systemServerInformation"
     | "invoices"
     | "subscriptions"
-    | "paymentGateways";
+    | "paymentGateways"
+    | "freqtrade";
   label: string;
   icon: string;
   description: string;

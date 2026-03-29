@@ -12,6 +12,25 @@ export const metadata: Metadata = {
   description: "Advanced AI-powered crypto trading",
 };
 
+// Blocking script: runs before React hydrates to prevent white flash.
+// Reads localStorage theme (set by next-themes), falls back to dark.
+const themeScript = `
+(function(){
+  try {
+    var t = localStorage.getItem('theme');
+    if (t === 'light') {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+      document.documentElement.classList.add('dark');
+    }
+  } catch(e) {
+    document.documentElement.classList.add('dark');
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -19,6 +38,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning data-name="root-html">
+      <head>
+        {/* eslint-disable-next-line react/no-danger */}
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className={inter.className} suppressHydrationWarning data-name="root-body">
         <ThemeProvider>
           <CurrencyRuntime />

@@ -223,6 +223,17 @@ def init_db() -> None:
                 """
             )
             cur.execute("CREATE INDEX IF NOT EXISTS bot_setup_events_bot_idx ON bot_setup_events (bot_id, created_at DESC)")
+
+            # Admin deploy settings (single-row)
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS admin_deploy_settings (
+                    id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+                    settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
         conn.commit()
 
 
@@ -1274,3 +1285,51 @@ def list_bot_setup_events(owner_user_id: int, bot_id: str) -> list[dict[str, Any
             )
             rows = cur.fetchall()
     return [dict(row) for row in rows]
+
+
+# ── Bot config persistence ─────────────────────────────────────────────
+
+
+def save_bot_config(bot_id: str, config: dict[str, Any]) -> None:
+    """Store a bot's config.json in the config_json column."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE bot_accounts SET config_json = %s::jsonb, updated_at = NOW() WHERE bot_id = %s",
+                (json.dumps(config), bot_id),
+            )
+        conn.commit()
+
+
+# ── Admin deploy settings ──────────────────────────────────────────────
+
+
+def get_deploy_settings() -> dict[str, Any]:
+    """Return the current deploy settings from the DB, or empty dict if none saved."""
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT settings FROM admin_deploy_settings WHERE id = 1")
+            row = cur.fetchone()
+    if row and isinstance(row.get("settings"), dict):
+        return row["settings"]
+    return {}
+
+
+def save_deploy_settings(settings_dict: dict[str, Any]) -> dict[str, Any]:
+    """Upsert deploy settings (single-row). Returns the saved settings."""
+    settings_json = json.dumps(settings_dict)
+    with get_pg_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO admin_deploy_settings (id, settings, updated_at)
+                VALUES (1, %s::jsonb, NOW())
+                ON CONFLICT (id) DO UPDATE
+                SET settings = %s::jsonb, updated_at = NOW()
+                RETURNING settings
+                """,
+                (settings_json, settings_json),
+            )
+            row = cur.fetchone()
+        conn.commit()
+    return row["settings"] if row else settings_dict

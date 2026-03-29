@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "BotPrimeX Backend"
     docker_socket: str = "unix://var/run/docker.sock"
-    postgres_url: str = "postgresql://postgres:postgres@postgres:5432/profitpath"
+    postgres_url: str = "postgresql://postgres:postgres@postgres:5432/botprimex"
     redis_url: str = "redis://redis:6379/0"
     frontend_url: str = "http://localhost:3000"
     public_base_url: str = "http://localhost:8000"
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "no-reply@botprimex.com"
+    smtp_from: str = "no-reply@botprimex.local"
     smtp_starttls: bool = False
     smtp_ssl: bool = False
 
@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     freqtrade_deploy_dir: str = "/opt/botprimex-freqtrade"
     freqtrade_deploy_image: str = "freqtradeorg/freqtrade:stable"
     freqtrade_deploy_api_port: int = 18080
+    freqtrade_default_strategy: str = "BotPrimeX"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="BACKEND_")
 

@@ -15,10 +15,11 @@ import { SystemServerInformationSection } from "./components/sections/system-ser
 import { InvoicesSection } from "./components/sections/invoices-section";
 import { SubscriptionsSection } from "./components/sections/subscriptions-section";
 import { PaymentGatewaysSection } from "./components/sections/payment-gateways-section";
+import { FreqtradeSection } from "./components/sections/freqtrade-section";
 import type { AdminSection } from "./types";
 
 export function AdminInterface() {
-  const [activeSection, setActiveSection] = useState<AdminSection["id"]>("general");
+  const [activeSection, setActiveSection] = useState<AdminSection["id"]>("freqtrade");
   const { isLoading, isSaving, isAdmin, settings, isDirty, updateSection, save, discard } = useAdminSettings();
 
   const sectionContent: Record<AdminSection["id"], ReactNode> = {
@@ -30,6 +31,7 @@ export function AdminInterface() {
     invoices: <InvoicesSection value={settings.invoices} onChange={(updates) => updateSection("invoices", updates)} />,
     subscriptions: <SubscriptionsSection value={settings.subscriptions} onChange={(updates) => updateSection("subscriptions", updates)} />,
     paymentGateways: <PaymentGatewaysSection value={settings.paymentGateways} onChange={(updates) => updateSection("paymentGateways", updates)} />,
+    freqtrade: <FreqtradeSection />,
   };
 
   if (isLoading) {

@@ -191,6 +191,12 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     icon: "CreditCard",
     description: "Gateway routing and payment provider availability controls",
   },
+  {
+    id: "freqtrade",
+    label: "Freqtrade",
+    icon: "Bot",
+    description: "Manage trading strategies, configuration, and Docker setup",
+  },
 ];
 
 export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {

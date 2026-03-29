@@ -139,12 +139,18 @@ def _resolve(bot_id: str) -> dict[str, str]:
         fallback_user = users[0] if users else ""
         fallback_password = passwords[0] if passwords else ""
 
+        # Prefer api_server credentials from the bot's own config_json
+        config_json = row.get("config_json") if isinstance(row.get("config_json"), dict) else {}
+        api_server = config_json.get("api_server") if isinstance(config_json.get("api_server"), dict) else {}
+        username = api_server.get("username") or fallback_user
+        password = api_server.get("password") or fallback_password
+
         return {
             "id": bot_id,
             "name": str(row.get("bot_name") or bot_id),
             "url": str(row.get("freqtrade_url") or fallback_url),
-            "username": fallback_user,
-            "password": fallback_password,
+            "username": username,
+            "password": password,
         }
     return BOT_REGISTRY[bot_id]
 
@@ -619,7 +625,6 @@ def bot_stats(bot_id: str):
     upsert_bot_runtime_data(
         bot_id,
         bot_name=bot.get("name"),
-        config_json=safe_config,
         profit_json=profit,
         balance_json=balance,
     )

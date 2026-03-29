@@ -45,3 +45,6 @@ pnpm-debug.log*
 
 # Local SSH keys
 .ssh/
+
+# Database backups
+backend/backups/

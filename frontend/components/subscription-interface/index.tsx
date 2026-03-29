@@ -22,9 +22,9 @@ const BILLING_CYCLES = ["30 Days", "90 Days"] as const;
 const MONTHLY_SERVER_FEE = 10;
 const LEVERAGE_OPTIONS = ["5x", "7x", "10x", "15x"] as const;
 const RECOMMENDED_LEVERAGE = "5x" as const;
-const TIMEFRAMES = ["30m", "1h", "4h"] as const;
+const TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
-const RECOMMENDED_TIMEFRAMES: readonly Timeframe[] = ["1h", "4h"];
+const RECOMMENDED_TIMEFRAMES: readonly Timeframe[] = ["5m"];
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
 function usd(n: number, noSign = false) {

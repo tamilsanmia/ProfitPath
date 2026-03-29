@@ -5,6 +5,7 @@ import logging
 import os
 import json
 import base64
+import pathlib
 import re
 import shlex
 import subprocess
@@ -556,31 +557,110 @@ class UpdateBotSetupSettingsPayload(BaseModel):
     max_open_order: int
     stoploss_pct: float
     dca_stoploss_pct: float
-    entry_30m_enabled: bool = False
-    entry_1h_enabled: bool = False
-    entry_4h_enabled: bool = False
+    leverage: float
+    # DCA core
+    max_dca_multiplier: int = 1
+    max_dca_orders_open: int = 2
+    initial_entry_stake_ratio: float = 0.5
+    dca_entry_stake_ratio: float = 0.5
+    shift_lookback: int = 5
+    # Per-TF entry toggles
+    entry_5m_long_enabled: bool = True
+    entry_5m_shift_long_enabled: bool = True
+    entry_5m_short_enabled: bool = True
+    entry_5m_shift_short_enabled: bool = True
+    entry_15m_long_enabled: bool = False
+    entry_15m_shift_long_enabled: bool = False
+    entry_15m_short_enabled: bool = False
+    entry_15m_shift_short_enabled: bool = False
+    entry_30m_long_enabled: bool = False
+    entry_30m_shift_long_enabled: bool = False
+    entry_30m_short_enabled: bool = False
+    entry_30m_shift_short_enabled: bool = False
+    entry_1h_long_enabled: bool = False
+    entry_1h_shift_long_enabled: bool = False
+    entry_1h_short_enabled: bool = False
+    entry_1h_shift_short_enabled: bool = False
+    entry_4h_long_enabled: bool = False
+    entry_4h_shift_long_enabled: bool = False
+    entry_4h_short_enabled: bool = False
+    entry_4h_shift_short_enabled: bool = False
+    # Per-TF RSI thresholds
+    entry_5m_rsi_long: float = 30.0
+    entry_5m_rsi_short: float = 70.0
+    entry_15m_rsi_long: float = 30.0
+    entry_15m_rsi_short: float = 70.0
+    entry_30m_rsi_long: float = 30.0
+    entry_30m_rsi_short: float = 70.0
+    entry_1h_rsi_long: float = 30.0
+    entry_1h_rsi_short: float = 70.0
+    entry_4h_rsi_long: float = 30.0
+    entry_4h_rsi_short: float = 70.0
+    # Cross-TF RSI (5m RSI thresholds for higher TF entries)
+    entry_5m_rsi_long_15m: float = 30.0
+    entry_5m_rsi_short_15m: float = 70.0
+    entry_5m_rsi_long_30m: float = 40.0
+    entry_5m_rsi_short_30m: float = 60.0
+    entry_5m_rsi_long_1h: float = 40.0
+    entry_5m_rsi_short_1h: float = 60.0
+    entry_5m_rsi_long_4h: float = 40.0
+    entry_5m_rsi_short_4h: float = 60.0
+    # CHG filter global
     use_chg_filter: bool = True
+    use_chg_exit_buffer: bool = True
+    # 5m CHG
+    chg_5m_enabled: bool = True
+    chg_5m_min: float = -10.0
+    chg_5m_max: float = 10.0
+    dca_chg_5m_min: float = -10.0
+    dca_chg_5m_max: float = 10.0
+    chg_5m_exit_buffer_enabled: bool = True
+    chg_5m_exit_buffer: float = 2.0
+    # 15m CHG
+    chg_15m_enabled: bool = True
+    chg_15m_min: float = -10.0
+    chg_15m_max: float = 10.0
+    dca_chg_15m_min: float = -10.0
+    dca_chg_15m_max: float = 10.0
+    chg_15m_exit_buffer_enabled: bool = True
+    chg_15m_exit_buffer: float = 2.0
+    # 30m CHG
     chg_30m_enabled: bool = True
-    chg_1h_enabled: bool = True
-    chg_4h_enabled: bool = True
     chg_30m_min: float = -10.0
     chg_30m_max: float = 10.0
-    chg_1h_min: float = -10.0
-    chg_1h_max: float = 10.0
-    chg_4h_min: float = -10.0
-    chg_4h_max: float = 10.0
     dca_chg_30m_min: float = -10.0
     dca_chg_30m_max: float = 10.0
+    chg_30m_exit_buffer_enabled: bool = True
+    chg_30m_exit_buffer: float = 2.0
+    # 1h CHG
+    chg_1h_enabled: bool = True
+    chg_1h_min: float = -10.0
+    chg_1h_max: float = 10.0
     dca_chg_1h_min: float = -10.0
     dca_chg_1h_max: float = 10.0
+    chg_1h_exit_buffer_enabled: bool = True
+    chg_1h_exit_buffer: float = 2.0
+    # 4h CHG
+    chg_4h_enabled: bool = True
+    chg_4h_min: float = -10.0
+    chg_4h_max: float = 10.0
     dca_chg_4h_min: float = -10.0
     dca_chg_4h_max: float = 10.0
-    chg_30m_exit_buffer: float = 2.0
-    chg_1h_exit_buffer: float = 2.0
+    chg_4h_exit_buffer_enabled: bool = True
     chg_4h_exit_buffer: float = 2.0
-    dca_reentry_min_profit: float = -0.05
-    dca_reentry_max_drawdown: float = -0.3
-    leverage: float
+    # DCA re-entry
+    dca_reentry_min_profit: float = -0.15
+    dca_reentry_max_drawdown: float = -0.5
+    dca2_reentry_min_profit: float = -0.30
+    dca2_reentry_max_drawdown: float = -0.5
+    # Volatility guard
+    dca_sudden_chg_guard_enabled: bool = True
+    dca_sudden_chg_threshold: float = 5.0
+    dca_sudden_chg_lookback: int = 10
+    # Telegram alerts
+    telegram_chg_alert_enabled: bool = True
+    telegram_chg_min: float = -5.0
+    telegram_chg_max: float = 5.0
 
 
 class EmailSessionPayload(BaseModel):
@@ -853,22 +933,7 @@ def _normalize_bounded_float(value: Any, *, default_value: float, min_value: flo
     return max(min_value, min(max_value, parsed))
 
 
-LEGACY_STRATEGY_METADATA_KEYS = [
-    "entry_5m_enabled",
-    "entry_15m_enabled",
-    "chg_5m_enabled",
-    "chg_15m_enabled",
-    "chg_5m_min",
-    "chg_5m_max",
-    "chg_15m_min",
-    "chg_15m_max",
-    "dca_chg_5m_min",
-    "dca_chg_5m_max",
-    "dca_chg_15m_min",
-    "dca_chg_15m_max",
-    "chg_5m_exit_buffer",
-    "chg_15m_exit_buffer",
-]
+LEGACY_STRATEGY_METADATA_KEYS: list[str] = []
 
 
 def _cleanup_legacy_strategy_settings_for_bot(user_id: int, bot_id: str) -> bool:
@@ -924,12 +989,23 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
             return raw.strip().lower() in {"true", "1", "yes", "on", "enable", "enabled"}
         return bool(raw)
 
+    # -- New params: 5m/15m CHG --
+    chg_5m_min = _normalize_bounded_float(metadata.get("chg_5m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_5m_max = _normalize_bounded_float(metadata.get("chg_5m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    chg_15m_min = _normalize_bounded_float(metadata.get("chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    chg_15m_max = _normalize_bounded_float(metadata.get("chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+
     chg_30m_min = _normalize_bounded_float(metadata.get("chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     chg_30m_max = _normalize_bounded_float(metadata.get("chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     chg_1h_min = _normalize_bounded_float(metadata.get("chg_1h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     chg_1h_max = _normalize_bounded_float(metadata.get("chg_1h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
     chg_4h_min = _normalize_bounded_float(metadata.get("chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     chg_4h_max = _normalize_bounded_float(metadata.get("chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+
+    dca_chg_5m_min = _normalize_bounded_float(metadata.get("dca_chg_5m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_5m_max = _normalize_bounded_float(metadata.get("dca_chg_5m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_15m_min = _normalize_bounded_float(metadata.get("dca_chg_15m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
+    dca_chg_15m_max = _normalize_bounded_float(metadata.get("dca_chg_15m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
 
     dca_chg_30m_min = _normalize_bounded_float(metadata.get("dca_chg_30m_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     dca_chg_30m_max = _normalize_bounded_float(metadata.get("dca_chg_30m_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
@@ -938,12 +1014,39 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
     dca_chg_4h_min = _normalize_bounded_float(metadata.get("dca_chg_4h_min"), default_value=-10.0, min_value=-100.0, max_value=100.0)
     dca_chg_4h_max = _normalize_bounded_float(metadata.get("dca_chg_4h_max"), default_value=10.0, min_value=-100.0, max_value=100.0)
 
+    chg_5m_exit_buffer = _normalize_bounded_float(metadata.get("chg_5m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
+    chg_15m_exit_buffer = _normalize_bounded_float(metadata.get("chg_15m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_30m_exit_buffer = _normalize_bounded_float(metadata.get("chg_30m_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_1h_exit_buffer = _normalize_bounded_float(metadata.get("chg_1h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
     chg_4h_exit_buffer = _normalize_bounded_float(metadata.get("chg_4h_exit_buffer"), default_value=2.0, min_value=0.0, max_value=100.0)
 
-    dca_reentry_min_profit = _normalize_bounded_float(metadata.get("dca_reentry_min_profit"), default_value=-0.05, min_value=-1.0, max_value=0.0)
-    dca_reentry_max_drawdown = _normalize_bounded_float(metadata.get("dca_reentry_max_drawdown"), default_value=-0.3, min_value=-1.0, max_value=0.0)
+    dca_reentry_min_profit = _normalize_bounded_float(metadata.get("dca_reentry_min_profit"), default_value=-0.15, min_value=-1.0, max_value=0.0)
+    dca_reentry_max_drawdown = _normalize_bounded_float(metadata.get("dca_reentry_max_drawdown"), default_value=-0.5, min_value=-1.0, max_value=0.0)
+    dca2_reentry_min_profit = _normalize_bounded_float(metadata.get("dca2_reentry_min_profit"), default_value=-0.30, min_value=-1.0, max_value=0.0)
+    dca2_reentry_max_drawdown = _normalize_bounded_float(metadata.get("dca2_reentry_max_drawdown"), default_value=-0.5, min_value=-1.0, max_value=0.0)
+
+    # Volatility guard
+    dca_sudden_chg_threshold = _normalize_bounded_float(metadata.get("dca_sudden_chg_threshold"), default_value=5.0, min_value=0.0, max_value=100.0)
+
+    # Stake ratios
+    initial_entry_stake_ratio = _normalize_bounded_float(metadata.get("initial_entry_stake_ratio"), default_value=0.5, min_value=0.01, max_value=1.0)
+    dca_entry_stake_ratio = _normalize_bounded_float(metadata.get("dca_entry_stake_ratio"), default_value=0.5, min_value=0.01, max_value=1.0)
+
+    # Per-TF RSI thresholds
+    def _read_rsi(key: str, default: float) -> float:
+        return _normalize_bounded_float(metadata.get(key), default_value=default, min_value=0.0, max_value=100.0)
+
+    # Telegram
+    telegram_chg_min = _normalize_bounded_float(metadata.get("telegram_chg_min"), default_value=-5.0, min_value=-100.0, max_value=100.0)
+    telegram_chg_max = _normalize_bounded_float(metadata.get("telegram_chg_max"), default_value=5.0, min_value=-100.0, max_value=100.0)
+
+    # DCA orders / multiplier
+    def _read_int(key: str, default: int, lo: int, hi: int) -> int:
+        try:
+            val = int(metadata.get(key) or default)
+        except (TypeError, ValueError):
+            val = default
+        return max(lo, min(hi, val))
 
     return {
         "strategy_name": strategy_name,
@@ -954,31 +1057,105 @@ def _normalize_strategy_settings(bot_row: dict[str, Any]) -> dict[str, Any]:
         "max_open_order": max_open_order,
         "stoploss_pct": stoploss_pct,
         "dca_stoploss_pct": dca_stoploss_pct,
-        "entry_30m_enabled": _read_bool("entry_30m_enabled", False),
-        "entry_1h_enabled": _read_bool("entry_1h_enabled", False),
-        "entry_4h_enabled": _read_bool("entry_4h_enabled", False),
+        "leverage": leverage,
+        # DCA core
+        "max_dca_multiplier": _read_int("max_dca_multiplier", 1, 0, 10),
+        "max_dca_orders_open": _read_int("max_dca_orders_open", 2, 0, 10),
+        "initial_entry_stake_ratio": initial_entry_stake_ratio,
+        "dca_entry_stake_ratio": dca_entry_stake_ratio,
+        "shift_lookback": _read_int("shift_lookback", 5, 1, 100),
+        # Per-TF entry toggles
+        "entry_5m_long_enabled": _read_bool("entry_5m_long_enabled", True),
+        "entry_5m_shift_long_enabled": _read_bool("entry_5m_shift_long_enabled", True),
+        "entry_5m_short_enabled": _read_bool("entry_5m_short_enabled", True),
+        "entry_5m_shift_short_enabled": _read_bool("entry_5m_shift_short_enabled", True),
+        "entry_15m_long_enabled": _read_bool("entry_15m_long_enabled", False),
+        "entry_15m_shift_long_enabled": _read_bool("entry_15m_shift_long_enabled", False),
+        "entry_15m_short_enabled": _read_bool("entry_15m_short_enabled", False),
+        "entry_15m_shift_short_enabled": _read_bool("entry_15m_shift_short_enabled", False),
+        "entry_30m_long_enabled": _read_bool("entry_30m_long_enabled", False),
+        "entry_30m_shift_long_enabled": _read_bool("entry_30m_shift_long_enabled", False),
+        "entry_30m_short_enabled": _read_bool("entry_30m_short_enabled", False),
+        "entry_30m_shift_short_enabled": _read_bool("entry_30m_shift_short_enabled", False),
+        "entry_1h_long_enabled": _read_bool("entry_1h_long_enabled", False),
+        "entry_1h_shift_long_enabled": _read_bool("entry_1h_shift_long_enabled", False),
+        "entry_1h_short_enabled": _read_bool("entry_1h_short_enabled", False),
+        "entry_1h_shift_short_enabled": _read_bool("entry_1h_shift_short_enabled", False),
+        "entry_4h_long_enabled": _read_bool("entry_4h_long_enabled", False),
+        "entry_4h_shift_long_enabled": _read_bool("entry_4h_shift_long_enabled", False),
+        "entry_4h_short_enabled": _read_bool("entry_4h_short_enabled", False),
+        "entry_4h_shift_short_enabled": _read_bool("entry_4h_shift_short_enabled", False),
+        # Per-TF RSI
+        "entry_5m_rsi_long": _read_rsi("entry_5m_rsi_long", 30.0),
+        "entry_5m_rsi_short": _read_rsi("entry_5m_rsi_short", 70.0),
+        "entry_15m_rsi_long": _read_rsi("entry_15m_rsi_long", 30.0),
+        "entry_15m_rsi_short": _read_rsi("entry_15m_rsi_short", 70.0),
+        "entry_30m_rsi_long": _read_rsi("entry_30m_rsi_long", 30.0),
+        "entry_30m_rsi_short": _read_rsi("entry_30m_rsi_short", 70.0),
+        "entry_1h_rsi_long": _read_rsi("entry_1h_rsi_long", 30.0),
+        "entry_1h_rsi_short": _read_rsi("entry_1h_rsi_short", 70.0),
+        "entry_4h_rsi_long": _read_rsi("entry_4h_rsi_long", 30.0),
+        "entry_4h_rsi_short": _read_rsi("entry_4h_rsi_short", 70.0),
+        # Cross-TF RSI
+        "entry_5m_rsi_long_15m": _read_rsi("entry_5m_rsi_long_15m", 30.0),
+        "entry_5m_rsi_short_15m": _read_rsi("entry_5m_rsi_short_15m", 70.0),
+        "entry_5m_rsi_long_30m": _read_rsi("entry_5m_rsi_long_30m", 40.0),
+        "entry_5m_rsi_short_30m": _read_rsi("entry_5m_rsi_short_30m", 60.0),
+        "entry_5m_rsi_long_1h": _read_rsi("entry_5m_rsi_long_1h", 40.0),
+        "entry_5m_rsi_short_1h": _read_rsi("entry_5m_rsi_short_1h", 60.0),
+        "entry_5m_rsi_long_4h": _read_rsi("entry_5m_rsi_long_4h", 40.0),
+        "entry_5m_rsi_short_4h": _read_rsi("entry_5m_rsi_short_4h", 60.0),
+        # CHG filters
         "use_chg_filter": _read_bool("use_chg_filter", True),
+        "use_chg_exit_buffer": _read_bool("use_chg_exit_buffer", True),
+        "chg_5m_enabled": _read_bool("chg_5m_enabled", True),
+        "chg_5m_min": chg_5m_min,
+        "chg_5m_max": chg_5m_max,
+        "dca_chg_5m_min": dca_chg_5m_min,
+        "dca_chg_5m_max": dca_chg_5m_max,
+        "chg_5m_exit_buffer_enabled": _read_bool("chg_5m_exit_buffer_enabled", True),
+        "chg_5m_exit_buffer": chg_5m_exit_buffer,
+        "chg_15m_enabled": _read_bool("chg_15m_enabled", True),
+        "chg_15m_min": chg_15m_min,
+        "chg_15m_max": chg_15m_max,
+        "dca_chg_15m_min": dca_chg_15m_min,
+        "dca_chg_15m_max": dca_chg_15m_max,
+        "chg_15m_exit_buffer_enabled": _read_bool("chg_15m_exit_buffer_enabled", True),
+        "chg_15m_exit_buffer": chg_15m_exit_buffer,
         "chg_30m_enabled": _read_bool("chg_30m_enabled", True),
-        "chg_1h_enabled": _read_bool("chg_1h_enabled", True),
-        "chg_4h_enabled": _read_bool("chg_4h_enabled", True),
         "chg_30m_min": chg_30m_min,
         "chg_30m_max": chg_30m_max,
-        "chg_1h_min": chg_1h_min,
-        "chg_1h_max": chg_1h_max,
-        "chg_4h_min": chg_4h_min,
-        "chg_4h_max": chg_4h_max,
         "dca_chg_30m_min": dca_chg_30m_min,
         "dca_chg_30m_max": dca_chg_30m_max,
+        "chg_30m_exit_buffer_enabled": _read_bool("chg_30m_exit_buffer_enabled", True),
+        "chg_30m_exit_buffer": chg_30m_exit_buffer,
+        "chg_1h_enabled": _read_bool("chg_1h_enabled", True),
+        "chg_1h_min": chg_1h_min,
+        "chg_1h_max": chg_1h_max,
         "dca_chg_1h_min": dca_chg_1h_min,
         "dca_chg_1h_max": dca_chg_1h_max,
+        "chg_1h_exit_buffer_enabled": _read_bool("chg_1h_exit_buffer_enabled", True),
+        "chg_1h_exit_buffer": chg_1h_exit_buffer,
+        "chg_4h_enabled": _read_bool("chg_4h_enabled", True),
+        "chg_4h_min": chg_4h_min,
+        "chg_4h_max": chg_4h_max,
         "dca_chg_4h_min": dca_chg_4h_min,
         "dca_chg_4h_max": dca_chg_4h_max,
-        "chg_30m_exit_buffer": chg_30m_exit_buffer,
-        "chg_1h_exit_buffer": chg_1h_exit_buffer,
+        "chg_4h_exit_buffer_enabled": _read_bool("chg_4h_exit_buffer_enabled", True),
         "chg_4h_exit_buffer": chg_4h_exit_buffer,
+        # DCA re-entry
         "dca_reentry_min_profit": dca_reentry_min_profit,
         "dca_reentry_max_drawdown": dca_reentry_max_drawdown,
-        "leverage": leverage,
+        "dca2_reentry_min_profit": dca2_reentry_min_profit,
+        "dca2_reentry_max_drawdown": dca2_reentry_max_drawdown,
+        # Volatility guard
+        "dca_sudden_chg_guard_enabled": _read_bool("dca_sudden_chg_guard_enabled", True),
+        "dca_sudden_chg_threshold": dca_sudden_chg_threshold,
+        "dca_sudden_chg_lookback": _read_int("dca_sudden_chg_lookback", 10, 1, 100),
+        # Telegram alerts
+        "telegram_chg_alert_enabled": _read_bool("telegram_chg_alert_enabled", True),
+        "telegram_chg_min": telegram_chg_min,
+        "telegram_chg_max": telegram_chg_max,
     }
 
 
@@ -1662,67 +1839,172 @@ def _apply_strategy_runtime_settings(
     stoploss_value: float,
     dca_stoploss_value: float,
     leverage_value: float,
-    entry_30m_enabled: bool,
-    entry_1h_enabled: bool,
-    entry_4h_enabled: bool,
+    # DCA core
+    max_dca_multiplier: int,
+    max_dca_orders_open: int,
+    initial_entry_stake_ratio: float,
+    dca_entry_stake_ratio: float,
+    shift_lookback: int,
+    # Per-TF entry toggles
+    entry_5m_long_enabled: bool,
+    entry_5m_shift_long_enabled: bool,
+    entry_5m_short_enabled: bool,
+    entry_5m_shift_short_enabled: bool,
+    entry_15m_long_enabled: bool,
+    entry_15m_shift_long_enabled: bool,
+    entry_15m_short_enabled: bool,
+    entry_15m_shift_short_enabled: bool,
+    entry_30m_long_enabled: bool,
+    entry_30m_shift_long_enabled: bool,
+    entry_30m_short_enabled: bool,
+    entry_30m_shift_short_enabled: bool,
+    entry_1h_long_enabled: bool,
+    entry_1h_shift_long_enabled: bool,
+    entry_1h_short_enabled: bool,
+    entry_1h_shift_short_enabled: bool,
+    entry_4h_long_enabled: bool,
+    entry_4h_shift_long_enabled: bool,
+    entry_4h_short_enabled: bool,
+    entry_4h_shift_short_enabled: bool,
+    # Per-TF RSI
+    entry_5m_rsi_long: float,
+    entry_5m_rsi_short: float,
+    entry_15m_rsi_long: float,
+    entry_15m_rsi_short: float,
+    entry_30m_rsi_long: float,
+    entry_30m_rsi_short: float,
+    entry_1h_rsi_long: float,
+    entry_1h_rsi_short: float,
+    entry_4h_rsi_long: float,
+    entry_4h_rsi_short: float,
+    # Cross-TF RSI
+    entry_5m_rsi_long_15m: float,
+    entry_5m_rsi_short_15m: float,
+    entry_5m_rsi_long_30m: float,
+    entry_5m_rsi_short_30m: float,
+    entry_5m_rsi_long_1h: float,
+    entry_5m_rsi_short_1h: float,
+    entry_5m_rsi_long_4h: float,
+    entry_5m_rsi_short_4h: float,
+    # CHG filter
     use_chg_filter: bool,
+    use_chg_exit_buffer: bool,
+    chg_5m_enabled: bool,
+    chg_5m_min: float,
+    chg_5m_max: float,
+    dca_chg_5m_min: float,
+    dca_chg_5m_max: float,
+    chg_5m_exit_buffer_enabled: bool,
+    chg_5m_exit_buffer: float,
+    chg_15m_enabled: bool,
+    chg_15m_min: float,
+    chg_15m_max: float,
+    dca_chg_15m_min: float,
+    dca_chg_15m_max: float,
+    chg_15m_exit_buffer_enabled: bool,
+    chg_15m_exit_buffer: float,
     chg_30m_enabled: bool,
-    chg_1h_enabled: bool,
-    chg_4h_enabled: bool,
     chg_30m_min: float,
     chg_30m_max: float,
-    chg_1h_min: float,
-    chg_1h_max: float,
-    chg_4h_min: float,
-    chg_4h_max: float,
     dca_chg_30m_min: float,
     dca_chg_30m_max: float,
+    chg_30m_exit_buffer_enabled: bool,
+    chg_30m_exit_buffer: float,
+    chg_1h_enabled: bool,
+    chg_1h_min: float,
+    chg_1h_max: float,
     dca_chg_1h_min: float,
     dca_chg_1h_max: float,
+    chg_1h_exit_buffer_enabled: bool,
+    chg_1h_exit_buffer: float,
+    chg_4h_enabled: bool,
+    chg_4h_min: float,
+    chg_4h_max: float,
     dca_chg_4h_min: float,
     dca_chg_4h_max: float,
-    chg_30m_exit_buffer: float,
-    chg_1h_exit_buffer: float,
+    chg_4h_exit_buffer_enabled: bool,
     chg_4h_exit_buffer: float,
+    # DCA re-entry
     dca_reentry_min_profit: float,
     dca_reentry_max_drawdown: float,
+    dca2_reentry_min_profit: float,
+    dca2_reentry_max_drawdown: float,
+    # Volatility guard
+    dca_sudden_chg_guard_enabled: bool,
+    dca_sudden_chg_threshold: float,
+    dca_sudden_chg_lookback: int,
+    # Telegram
+    telegram_chg_alert_enabled: bool,
+    telegram_chg_min: float,
+    telegram_chg_max: float,
 ) -> str:
     updated = _apply_strategy_dca_mode(strategy_code, dca_enabled=dca_enabled)
 
     def _fmt(value: float) -> str:
         return f"{value:.6f}".rstrip("0").rstrip(".")
 
+    def _bool(value: bool) -> str:
+        return "True" if value else "False"
+
     updated = _upsert_strategy_class_attr(updated, "stoploss", _fmt(stoploss_value))
     updated = _upsert_strategy_class_attr(updated, "dca_stoploss", _fmt(dca_stoploss_value))
     updated = _upsert_strategy_class_attr(updated, "leverage_value", _fmt(leverage_value))
-    updated = _upsert_strategy_class_attr(updated, "entry_30m_enabled", "True" if entry_30m_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "entry_1h_enabled", "True" if entry_1h_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "entry_4h_enabled", "True" if entry_4h_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "use_chg_filter", "True" if use_chg_filter else "False")
-    updated = _upsert_strategy_class_attr(updated, "chg_30m_enabled", "True" if chg_30m_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "chg_1h_enabled", "True" if chg_1h_enabled else "False")
-    updated = _upsert_strategy_class_attr(updated, "chg_4h_enabled", "True" if chg_4h_enabled else "False")
 
-    updated = _upsert_strategy_class_attr(updated, "chg_30m_min", _fmt(chg_30m_min))
-    updated = _upsert_strategy_class_attr(updated, "chg_30m_max", _fmt(chg_30m_max))
-    updated = _upsert_strategy_class_attr(updated, "chg_1h_min", _fmt(chg_1h_min))
-    updated = _upsert_strategy_class_attr(updated, "chg_1h_max", _fmt(chg_1h_max))
-    updated = _upsert_strategy_class_attr(updated, "chg_4h_min", _fmt(chg_4h_min))
-    updated = _upsert_strategy_class_attr(updated, "chg_4h_max", _fmt(chg_4h_max))
+    # DCA core
+    updated = _upsert_strategy_class_attr(updated, "max_entry_position_adjustment", str(max_dca_multiplier + 1))
+    updated = _upsert_strategy_class_attr(updated, "max_dca_multiplier", str(max_dca_multiplier))
+    updated = _upsert_strategy_class_attr(updated, "max_dca_orders_open", str(max_dca_orders_open))
+    updated = _upsert_strategy_class_attr(updated, "initial_entry_stake_ratio", _fmt(initial_entry_stake_ratio))
+    updated = _upsert_strategy_class_attr(updated, "dca_entry_stake_ratio", _fmt(dca_entry_stake_ratio))
+    updated = _upsert_strategy_class_attr(updated, "shift_lookback", str(shift_lookback))
 
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_min", _fmt(dca_chg_30m_min))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_30m_max", _fmt(dca_chg_30m_max))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_1h_min", _fmt(dca_chg_1h_min))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_1h_max", _fmt(dca_chg_1h_max))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_min", _fmt(dca_chg_4h_min))
-    updated = _upsert_strategy_class_attr(updated, "dca_chg_4h_max", _fmt(dca_chg_4h_max))
+    # Per-TF entry toggles
+    for tf in ("5m", "15m", "30m", "1h", "4h"):
+        for sig in ("long", "shift_long", "short", "shift_short"):
+            key = f"entry_{tf}_{sig}_enabled"
+            updated = _upsert_strategy_class_attr(updated, key, _bool(locals()[key]))
 
-    updated = _upsert_strategy_class_attr(updated, "chg_30m_exit_buffer", _fmt(chg_30m_exit_buffer))
-    updated = _upsert_strategy_class_attr(updated, "chg_1h_exit_buffer", _fmt(chg_1h_exit_buffer))
-    updated = _upsert_strategy_class_attr(updated, "chg_4h_exit_buffer", _fmt(chg_4h_exit_buffer))
+    # Per-TF RSI
+    for tf in ("5m", "15m", "30m", "1h", "4h"):
+        for side in ("long", "short"):
+            key = f"entry_{tf}_rsi_{side}"
+            updated = _upsert_strategy_class_attr(updated, key, _fmt(locals()[key]))
 
+    # Cross-TF RSI
+    for htf in ("15m", "30m", "1h", "4h"):
+        for side in ("long", "short"):
+            key = f"entry_5m_rsi_{side}_{htf}"
+            updated = _upsert_strategy_class_attr(updated, key, _fmt(locals()[key]))
+
+    # CHG filter globals
+    updated = _upsert_strategy_class_attr(updated, "use_chg_filter", _bool(use_chg_filter))
+    updated = _upsert_strategy_class_attr(updated, "use_chg_exit_buffer", _bool(use_chg_exit_buffer))
+
+    # Per-TF CHG
+    for tf in ("5m", "15m", "30m", "1h", "4h"):
+        updated = _upsert_strategy_class_attr(updated, f"chg_{tf}_enabled", _bool(locals()[f"chg_{tf}_enabled"]))
+        updated = _upsert_strategy_class_attr(updated, f"chg_{tf}_min", _fmt(locals()[f"chg_{tf}_min"]))
+        updated = _upsert_strategy_class_attr(updated, f"chg_{tf}_max", _fmt(locals()[f"chg_{tf}_max"]))
+        updated = _upsert_strategy_class_attr(updated, f"dca_chg_{tf}_min", _fmt(locals()[f"dca_chg_{tf}_min"]))
+        updated = _upsert_strategy_class_attr(updated, f"dca_chg_{tf}_max", _fmt(locals()[f"dca_chg_{tf}_max"]))
+        updated = _upsert_strategy_class_attr(updated, f"chg_{tf}_exit_buffer_enabled", _bool(locals()[f"chg_{tf}_exit_buffer_enabled"]))
+        updated = _upsert_strategy_class_attr(updated, f"chg_{tf}_exit_buffer", _fmt(locals()[f"chg_{tf}_exit_buffer"]))
+
+    # DCA re-entry
     updated = _upsert_strategy_class_attr(updated, "dca_reentry_min_profit", _fmt(dca_reentry_min_profit))
     updated = _upsert_strategy_class_attr(updated, "dca_reentry_max_drawdown", _fmt(dca_reentry_max_drawdown))
+    updated = _upsert_strategy_class_attr(updated, "dca2_reentry_min_profit", _fmt(dca2_reentry_min_profit))
+    updated = _upsert_strategy_class_attr(updated, "dca2_reentry_max_drawdown", _fmt(dca2_reentry_max_drawdown))
+
+    # Volatility guard
+    updated = _upsert_strategy_class_attr(updated, "dca_sudden_chg_guard_enabled", _bool(dca_sudden_chg_guard_enabled))
+    updated = _upsert_strategy_class_attr(updated, "dca_sudden_chg_threshold", _fmt(dca_sudden_chg_threshold))
+    updated = _upsert_strategy_class_attr(updated, "dca_sudden_chg_lookback", str(dca_sudden_chg_lookback))
+
+    # Telegram
+    updated = _upsert_strategy_class_attr(updated, "telegram_chg_alert_enabled", _bool(telegram_chg_alert_enabled))
+    updated = _upsert_strategy_class_attr(updated, "telegram_chg_min", _fmt(telegram_chg_min))
+    updated = _upsert_strategy_class_attr(updated, "telegram_chg_max", _fmt(telegram_chg_max))
 
     updated = re.sub(
         r"(?m)^\s*return\s+max\(min\(5\.0,\s*max_leverage\),\s*1\.0\)\s*$",
@@ -1735,10 +2017,6 @@ def _apply_strategy_runtime_settings(
         "stoploss_from_open(self.dca_stoploss, current_profit)",
         updated,
     )
-
-    updated = re.sub(r"(?m)^(\s*)signal_30m\s*=\s*\(", r"\1signal_30m = self.entry_30m_enabled and (", updated)
-    updated = re.sub(r"(?m)^(\s*)signal_1h\s*=\s*\(", r"\1signal_1h = self.entry_1h_enabled and (", updated)
-    updated = re.sub(r"(?m)^(\s*)signal_4h\s*=\s*\(", r"\1signal_4h = self.entry_4h_enabled and (", updated)
 
     return updated
 
@@ -1926,30 +2204,104 @@ def _deploy_freqtrade_bundle(
     stoploss_value: float,
     dca_stoploss_value: float,
     leverage_value: float,
-    entry_30m_enabled: bool,
-    entry_1h_enabled: bool,
-    entry_4h_enabled: bool,
+    # DCA core
+    max_dca_multiplier: int,
+    max_dca_orders_open: int,
+    initial_entry_stake_ratio: float,
+    dca_entry_stake_ratio: float,
+    shift_lookback: int,
+    # Per-TF entry toggles
+    entry_5m_long_enabled: bool,
+    entry_5m_shift_long_enabled: bool,
+    entry_5m_short_enabled: bool,
+    entry_5m_shift_short_enabled: bool,
+    entry_15m_long_enabled: bool,
+    entry_15m_shift_long_enabled: bool,
+    entry_15m_short_enabled: bool,
+    entry_15m_shift_short_enabled: bool,
+    entry_30m_long_enabled: bool,
+    entry_30m_shift_long_enabled: bool,
+    entry_30m_short_enabled: bool,
+    entry_30m_shift_short_enabled: bool,
+    entry_1h_long_enabled: bool,
+    entry_1h_shift_long_enabled: bool,
+    entry_1h_short_enabled: bool,
+    entry_1h_shift_short_enabled: bool,
+    entry_4h_long_enabled: bool,
+    entry_4h_shift_long_enabled: bool,
+    entry_4h_short_enabled: bool,
+    entry_4h_shift_short_enabled: bool,
+    # Per-TF RSI
+    entry_5m_rsi_long: float,
+    entry_5m_rsi_short: float,
+    entry_15m_rsi_long: float,
+    entry_15m_rsi_short: float,
+    entry_30m_rsi_long: float,
+    entry_30m_rsi_short: float,
+    entry_1h_rsi_long: float,
+    entry_1h_rsi_short: float,
+    entry_4h_rsi_long: float,
+    entry_4h_rsi_short: float,
+    # Cross-TF RSI
+    entry_5m_rsi_long_15m: float,
+    entry_5m_rsi_short_15m: float,
+    entry_5m_rsi_long_30m: float,
+    entry_5m_rsi_short_30m: float,
+    entry_5m_rsi_long_1h: float,
+    entry_5m_rsi_short_1h: float,
+    entry_5m_rsi_long_4h: float,
+    entry_5m_rsi_short_4h: float,
+    # CHG filter
     use_chg_filter: bool,
+    use_chg_exit_buffer: bool,
+    chg_5m_enabled: bool,
+    chg_5m_min: float,
+    chg_5m_max: float,
+    dca_chg_5m_min: float,
+    dca_chg_5m_max: float,
+    chg_5m_exit_buffer_enabled: bool,
+    chg_5m_exit_buffer: float,
+    chg_15m_enabled: bool,
+    chg_15m_min: float,
+    chg_15m_max: float,
+    dca_chg_15m_min: float,
+    dca_chg_15m_max: float,
+    chg_15m_exit_buffer_enabled: bool,
+    chg_15m_exit_buffer: float,
     chg_30m_enabled: bool,
-    chg_1h_enabled: bool,
-    chg_4h_enabled: bool,
     chg_30m_min: float,
     chg_30m_max: float,
-    chg_1h_min: float,
-    chg_1h_max: float,
-    chg_4h_min: float,
-    chg_4h_max: float,
     dca_chg_30m_min: float,
     dca_chg_30m_max: float,
+    chg_30m_exit_buffer_enabled: bool,
+    chg_30m_exit_buffer: float,
+    chg_1h_enabled: bool,
+    chg_1h_min: float,
+    chg_1h_max: float,
     dca_chg_1h_min: float,
     dca_chg_1h_max: float,
+    chg_1h_exit_buffer_enabled: bool,
+    chg_1h_exit_buffer: float,
+    chg_4h_enabled: bool,
+    chg_4h_min: float,
+    chg_4h_max: float,
     dca_chg_4h_min: float,
     dca_chg_4h_max: float,
-    chg_30m_exit_buffer: float,
-    chg_1h_exit_buffer: float,
+    chg_4h_exit_buffer_enabled: bool,
     chg_4h_exit_buffer: float,
+    # DCA re-entry
     dca_reentry_min_profit: float,
     dca_reentry_max_drawdown: float,
+    dca2_reentry_min_profit: float,
+    dca2_reentry_max_drawdown: float,
+    # Volatility guard
+    dca_sudden_chg_guard_enabled: bool,
+    dca_sudden_chg_threshold: float,
+    dca_sudden_chg_lookback: int,
+    # Telegram
+    telegram_chg_alert_enabled: bool,
+    telegram_chg_min: float,
+    telegram_chg_max: float,
     reset_user_data: bool = False,
 ) -> dict[str, Any]:
     deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/botprimex-freqtrade").strip() or "/opt/botprimex-freqtrade"
@@ -1972,6 +2324,14 @@ def _deploy_freqtrade_bundle(
         max_open_trades=max_open_trades,
         override=config_override,
     )
+
+    # Persist config to DB for future apply-to-bots merging
+    try:
+        from .database import save_bot_config as _save_cfg
+        _save_cfg(bot_id, config_payload)
+    except Exception:
+        pass  # Non-critical, don't block deployment
+
     raw_strategy = strategy_code.strip() if isinstance(strategy_code, str) and strategy_code.strip() else _default_strategy_code(strategy)
     strategy_payload = _apply_strategy_runtime_settings(
         raw_strategy,
@@ -1979,30 +2339,96 @@ def _deploy_freqtrade_bundle(
         stoploss_value=stoploss_value,
         dca_stoploss_value=dca_stoploss_value,
         leverage_value=leverage_value,
-        entry_30m_enabled=entry_30m_enabled,
-        entry_1h_enabled=entry_1h_enabled,
-        entry_4h_enabled=entry_4h_enabled,
+        max_dca_multiplier=max_dca_multiplier,
+        max_dca_orders_open=max_dca_orders_open,
+        initial_entry_stake_ratio=initial_entry_stake_ratio,
+        dca_entry_stake_ratio=dca_entry_stake_ratio,
+        shift_lookback=shift_lookback,
+        entry_5m_long_enabled=entry_5m_long_enabled,
+        entry_5m_shift_long_enabled=entry_5m_shift_long_enabled,
+        entry_5m_short_enabled=entry_5m_short_enabled,
+        entry_5m_shift_short_enabled=entry_5m_shift_short_enabled,
+        entry_15m_long_enabled=entry_15m_long_enabled,
+        entry_15m_shift_long_enabled=entry_15m_shift_long_enabled,
+        entry_15m_short_enabled=entry_15m_short_enabled,
+        entry_15m_shift_short_enabled=entry_15m_shift_short_enabled,
+        entry_30m_long_enabled=entry_30m_long_enabled,
+        entry_30m_shift_long_enabled=entry_30m_shift_long_enabled,
+        entry_30m_short_enabled=entry_30m_short_enabled,
+        entry_30m_shift_short_enabled=entry_30m_shift_short_enabled,
+        entry_1h_long_enabled=entry_1h_long_enabled,
+        entry_1h_shift_long_enabled=entry_1h_shift_long_enabled,
+        entry_1h_short_enabled=entry_1h_short_enabled,
+        entry_1h_shift_short_enabled=entry_1h_shift_short_enabled,
+        entry_4h_long_enabled=entry_4h_long_enabled,
+        entry_4h_shift_long_enabled=entry_4h_shift_long_enabled,
+        entry_4h_short_enabled=entry_4h_short_enabled,
+        entry_4h_shift_short_enabled=entry_4h_shift_short_enabled,
+        entry_5m_rsi_long=entry_5m_rsi_long,
+        entry_5m_rsi_short=entry_5m_rsi_short,
+        entry_15m_rsi_long=entry_15m_rsi_long,
+        entry_15m_rsi_short=entry_15m_rsi_short,
+        entry_30m_rsi_long=entry_30m_rsi_long,
+        entry_30m_rsi_short=entry_30m_rsi_short,
+        entry_1h_rsi_long=entry_1h_rsi_long,
+        entry_1h_rsi_short=entry_1h_rsi_short,
+        entry_4h_rsi_long=entry_4h_rsi_long,
+        entry_4h_rsi_short=entry_4h_rsi_short,
+        entry_5m_rsi_long_15m=entry_5m_rsi_long_15m,
+        entry_5m_rsi_short_15m=entry_5m_rsi_short_15m,
+        entry_5m_rsi_long_30m=entry_5m_rsi_long_30m,
+        entry_5m_rsi_short_30m=entry_5m_rsi_short_30m,
+        entry_5m_rsi_long_1h=entry_5m_rsi_long_1h,
+        entry_5m_rsi_short_1h=entry_5m_rsi_short_1h,
+        entry_5m_rsi_long_4h=entry_5m_rsi_long_4h,
+        entry_5m_rsi_short_4h=entry_5m_rsi_short_4h,
         use_chg_filter=use_chg_filter,
+        use_chg_exit_buffer=use_chg_exit_buffer,
+        chg_5m_enabled=chg_5m_enabled,
+        chg_5m_min=chg_5m_min,
+        chg_5m_max=chg_5m_max,
+        dca_chg_5m_min=dca_chg_5m_min,
+        dca_chg_5m_max=dca_chg_5m_max,
+        chg_5m_exit_buffer_enabled=chg_5m_exit_buffer_enabled,
+        chg_5m_exit_buffer=chg_5m_exit_buffer,
+        chg_15m_enabled=chg_15m_enabled,
+        chg_15m_min=chg_15m_min,
+        chg_15m_max=chg_15m_max,
+        dca_chg_15m_min=dca_chg_15m_min,
+        dca_chg_15m_max=dca_chg_15m_max,
+        chg_15m_exit_buffer_enabled=chg_15m_exit_buffer_enabled,
+        chg_15m_exit_buffer=chg_15m_exit_buffer,
         chg_30m_enabled=chg_30m_enabled,
-        chg_1h_enabled=chg_1h_enabled,
-        chg_4h_enabled=chg_4h_enabled,
         chg_30m_min=chg_30m_min,
         chg_30m_max=chg_30m_max,
-        chg_1h_min=chg_1h_min,
-        chg_1h_max=chg_1h_max,
-        chg_4h_min=chg_4h_min,
-        chg_4h_max=chg_4h_max,
         dca_chg_30m_min=dca_chg_30m_min,
         dca_chg_30m_max=dca_chg_30m_max,
+        chg_30m_exit_buffer_enabled=chg_30m_exit_buffer_enabled,
+        chg_30m_exit_buffer=chg_30m_exit_buffer,
+        chg_1h_enabled=chg_1h_enabled,
+        chg_1h_min=chg_1h_min,
+        chg_1h_max=chg_1h_max,
         dca_chg_1h_min=dca_chg_1h_min,
         dca_chg_1h_max=dca_chg_1h_max,
+        chg_1h_exit_buffer_enabled=chg_1h_exit_buffer_enabled,
+        chg_1h_exit_buffer=chg_1h_exit_buffer,
+        chg_4h_enabled=chg_4h_enabled,
+        chg_4h_min=chg_4h_min,
+        chg_4h_max=chg_4h_max,
         dca_chg_4h_min=dca_chg_4h_min,
         dca_chg_4h_max=dca_chg_4h_max,
-        chg_30m_exit_buffer=chg_30m_exit_buffer,
-        chg_1h_exit_buffer=chg_1h_exit_buffer,
+        chg_4h_exit_buffer_enabled=chg_4h_exit_buffer_enabled,
         chg_4h_exit_buffer=chg_4h_exit_buffer,
         dca_reentry_min_profit=dca_reentry_min_profit,
         dca_reentry_max_drawdown=dca_reentry_max_drawdown,
+        dca2_reentry_min_profit=dca2_reentry_min_profit,
+        dca2_reentry_max_drawdown=dca2_reentry_max_drawdown,
+        dca_sudden_chg_guard_enabled=dca_sudden_chg_guard_enabled,
+        dca_sudden_chg_threshold=dca_sudden_chg_threshold,
+        dca_sudden_chg_lookback=dca_sudden_chg_lookback,
+        telegram_chg_alert_enabled=telegram_chg_alert_enabled,
+        telegram_chg_min=telegram_chg_min,
+        telegram_chg_max=telegram_chg_max,
     )
 
     compose_yaml = f'''services:\n  freqtrade:\n    image: {image}\n    container_name: pp-freqtrade-{bot_id[-8:]}\n    restart: unless-stopped\n    ports:\n      - "{api_port}:8080"\n    volumes:\n      - ./user_data:/freqtrade/user_data\n    command: >\n      trade\n      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite\n      --config /freqtrade/user_data/config.json\n      --strategy {strategy}\n'''
@@ -2631,31 +3057,66 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
                 "max_open_order": max_open_order,
                 "stoploss_pct": -99,
                 "dca_stoploss_pct": -50,
-                "entry_30m_enabled": False,
-                "entry_1h_enabled": False,
-                "entry_4h_enabled": False,
-                "use_chg_filter": True,
-                "chg_30m_enabled": True,
-                "chg_1h_enabled": True,
-                "chg_4h_enabled": True,
-                "chg_30m_min": -10.0,
-                "chg_30m_max": 10.0,
-                "chg_1h_min": -10.0,
-                "chg_1h_max": 10.0,
-                "chg_4h_min": -10.0,
-                "chg_4h_max": 10.0,
-                "dca_chg_30m_min": -10.0,
-                "dca_chg_30m_max": 10.0,
-                "dca_chg_1h_min": -10.0,
-                "dca_chg_1h_max": 10.0,
-                "dca_chg_4h_min": -10.0,
-                "dca_chg_4h_max": 10.0,
-                "chg_30m_exit_buffer": 2.0,
-                "chg_1h_exit_buffer": 2.0,
-                "chg_4h_exit_buffer": 2.0,
-                "dca_reentry_min_profit": -0.05,
-                "dca_reentry_max_drawdown": -0.3,
                 "leverage": 5,
+                # DCA core
+                "max_dca_multiplier": 1,
+                "max_dca_orders_open": 2,
+                "initial_entry_stake_ratio": 0.5,
+                "dca_entry_stake_ratio": 0.5,
+                "shift_lookback": 5,
+                # Per-TF entry toggles
+                "entry_5m_long_enabled": True,
+                "entry_5m_shift_long_enabled": True,
+                "entry_5m_short_enabled": True,
+                "entry_5m_shift_short_enabled": True,
+                "entry_15m_long_enabled": False,
+                "entry_15m_shift_long_enabled": False,
+                "entry_15m_short_enabled": False,
+                "entry_15m_shift_short_enabled": False,
+                "entry_30m_long_enabled": False,
+                "entry_30m_shift_long_enabled": False,
+                "entry_30m_short_enabled": False,
+                "entry_30m_shift_short_enabled": False,
+                "entry_1h_long_enabled": False,
+                "entry_1h_shift_long_enabled": False,
+                "entry_1h_short_enabled": False,
+                "entry_1h_shift_short_enabled": False,
+                "entry_4h_long_enabled": False,
+                "entry_4h_shift_long_enabled": False,
+                "entry_4h_short_enabled": False,
+                "entry_4h_shift_short_enabled": False,
+                # Per-TF RSI
+                "entry_5m_rsi_long": 30, "entry_5m_rsi_short": 70,
+                "entry_15m_rsi_long": 30, "entry_15m_rsi_short": 70,
+                "entry_30m_rsi_long": 30, "entry_30m_rsi_short": 70,
+                "entry_1h_rsi_long": 30, "entry_1h_rsi_short": 70,
+                "entry_4h_rsi_long": 30, "entry_4h_rsi_short": 70,
+                # Cross-TF RSI
+                "entry_5m_rsi_long_15m": 30, "entry_5m_rsi_short_15m": 70,
+                "entry_5m_rsi_long_30m": 40, "entry_5m_rsi_short_30m": 60,
+                "entry_5m_rsi_long_1h": 40, "entry_5m_rsi_short_1h": 60,
+                "entry_5m_rsi_long_4h": 40, "entry_5m_rsi_short_4h": 60,
+                # CHG filter
+                "use_chg_filter": True,
+                "use_chg_exit_buffer": True,
+                **{f"chg_{tf}_enabled": True for tf in ("5m", "15m", "30m", "1h", "4h")},
+                **{f"chg_{tf}_{k}": v for tf in ("5m", "15m", "30m", "1h", "4h") for k, v in (("min", -10.0), ("max", 10.0))},
+                **{f"dca_chg_{tf}_{k}": v for tf in ("5m", "15m", "30m", "1h", "4h") for k, v in (("min", -10.0), ("max", 10.0))},
+                **{f"chg_{tf}_exit_buffer_enabled": True for tf in ("5m", "15m", "30m", "1h", "4h")},
+                **{f"chg_{tf}_exit_buffer": 2.0 for tf in ("5m", "15m", "30m", "1h", "4h")},
+                # DCA re-entry
+                "dca_reentry_min_profit": -0.15,
+                "dca_reentry_max_drawdown": -0.5,
+                "dca2_reentry_min_profit": -0.30,
+                "dca2_reentry_max_drawdown": -0.5,
+                # Volatility guard
+                "dca_sudden_chg_guard_enabled": True,
+                "dca_sudden_chg_threshold": 5.0,
+                "dca_sudden_chg_lookback": 10,
+                # Telegram
+                "telegram_chg_alert_enabled": True,
+                "telegram_chg_min": -5.0,
+                "telegram_chg_max": 5.0,
             },
         )
     except Exception as exc:
@@ -3081,30 +3542,53 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
     stoploss_value = float(strategy_settings["stoploss_pct"]) / 100.0
     dca_stoploss_value = float(strategy_settings["dca_stoploss_pct"]) / 100.0
     leverage_value = float(strategy_settings["leverage"])
-    entry_30m_enabled = bool(strategy_settings["entry_30m_enabled"])
-    entry_1h_enabled = bool(strategy_settings["entry_1h_enabled"])
-    entry_4h_enabled = bool(strategy_settings["entry_4h_enabled"])
-    use_chg_filter = bool(strategy_settings["use_chg_filter"])
-    chg_30m_enabled = bool(strategy_settings["chg_30m_enabled"])
-    chg_1h_enabled = bool(strategy_settings["chg_1h_enabled"])
-    chg_4h_enabled = bool(strategy_settings["chg_4h_enabled"])
-    chg_30m_min = float(strategy_settings["chg_30m_min"])
-    chg_30m_max = float(strategy_settings["chg_30m_max"])
-    chg_1h_min = float(strategy_settings["chg_1h_min"])
-    chg_1h_max = float(strategy_settings["chg_1h_max"])
-    chg_4h_min = float(strategy_settings["chg_4h_min"])
-    chg_4h_max = float(strategy_settings["chg_4h_max"])
-    dca_chg_30m_min = float(strategy_settings["dca_chg_30m_min"])
-    dca_chg_30m_max = float(strategy_settings["dca_chg_30m_max"])
-    dca_chg_1h_min = float(strategy_settings["dca_chg_1h_min"])
-    dca_chg_1h_max = float(strategy_settings["dca_chg_1h_max"])
-    dca_chg_4h_min = float(strategy_settings["dca_chg_4h_min"])
-    dca_chg_4h_max = float(strategy_settings["dca_chg_4h_max"])
-    chg_30m_exit_buffer = float(strategy_settings["chg_30m_exit_buffer"])
-    chg_1h_exit_buffer = float(strategy_settings["chg_1h_exit_buffer"])
-    chg_4h_exit_buffer = float(strategy_settings["chg_4h_exit_buffer"])
-    dca_reentry_min_profit = float(strategy_settings["dca_reentry_min_profit"])
-    dca_reentry_max_drawdown = float(strategy_settings["dca_reentry_max_drawdown"])
+
+    # Extract all strategy runtime params from normalized settings
+    _ss = strategy_settings  # shorthand
+    deploy_strategy_kwargs = dict(
+        # DCA core
+        max_dca_multiplier=int(_ss["max_dca_multiplier"]),
+        max_dca_orders_open=int(_ss["max_dca_orders_open"]),
+        initial_entry_stake_ratio=float(_ss["initial_entry_stake_ratio"]),
+        dca_entry_stake_ratio=float(_ss["dca_entry_stake_ratio"]),
+        shift_lookback=int(_ss["shift_lookback"]),
+        # Per-TF entry toggles
+        **{f"entry_{tf}_{sig}_enabled": bool(_ss[f"entry_{tf}_{sig}_enabled"])
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for sig in ("long", "shift_long", "short", "shift_short")},
+        # Per-TF RSI
+        **{f"entry_{tf}_rsi_{side}": float(_ss[f"entry_{tf}_rsi_{side}"])
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for side in ("long", "short")},
+        # Cross-TF RSI
+        **{f"entry_5m_rsi_{side}_{htf}": float(_ss[f"entry_5m_rsi_{side}_{htf}"])
+           for htf in ("15m", "30m", "1h", "4h")
+           for side in ("long", "short")},
+        # CHG filter
+        use_chg_filter=bool(_ss["use_chg_filter"]),
+        use_chg_exit_buffer=bool(_ss["use_chg_exit_buffer"]),
+        **{k: (bool if "enabled" in k else float)(_ss[k])
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for k in (
+               f"chg_{tf}_enabled", f"chg_{tf}_min", f"chg_{tf}_max",
+               f"dca_chg_{tf}_min", f"dca_chg_{tf}_max",
+               f"chg_{tf}_exit_buffer_enabled", f"chg_{tf}_exit_buffer",
+           )},
+        # DCA re-entry
+        dca_reentry_min_profit=float(_ss["dca_reentry_min_profit"]),
+        dca_reentry_max_drawdown=float(_ss["dca_reentry_max_drawdown"]),
+        dca2_reentry_min_profit=float(_ss["dca2_reentry_min_profit"]),
+        dca2_reentry_max_drawdown=float(_ss["dca2_reentry_max_drawdown"]),
+        # Volatility guard
+        dca_sudden_chg_guard_enabled=bool(_ss["dca_sudden_chg_guard_enabled"]),
+        dca_sudden_chg_threshold=float(_ss["dca_sudden_chg_threshold"]),
+        dca_sudden_chg_lookback=int(_ss["dca_sudden_chg_lookback"]),
+        # Telegram
+        telegram_chg_alert_enabled=bool(_ss["telegram_chg_alert_enabled"]),
+        telegram_chg_min=float(_ss["telegram_chg_min"]),
+        telegram_chg_max=float(_ss["telegram_chg_max"]),
+    )
+
     previous_is_demo = account_type == "demo"
     if payload.dry_run is None:
         dry_run_mode = account_type == "demo"
@@ -3171,30 +3655,7 @@ def deploy_bot_setup(bot_id: str, payload: DeployBotSetupPayload) -> dict[str, A
             stoploss_value=stoploss_value,
             dca_stoploss_value=dca_stoploss_value,
             leverage_value=leverage_value,
-            entry_30m_enabled=entry_30m_enabled,
-            entry_1h_enabled=entry_1h_enabled,
-            entry_4h_enabled=entry_4h_enabled,
-            use_chg_filter=use_chg_filter,
-            chg_30m_enabled=chg_30m_enabled,
-            chg_1h_enabled=chg_1h_enabled,
-            chg_4h_enabled=chg_4h_enabled,
-            chg_30m_min=chg_30m_min,
-            chg_30m_max=chg_30m_max,
-            chg_1h_min=chg_1h_min,
-            chg_1h_max=chg_1h_max,
-            chg_4h_min=chg_4h_min,
-            chg_4h_max=chg_4h_max,
-            dca_chg_30m_min=dca_chg_30m_min,
-            dca_chg_30m_max=dca_chg_30m_max,
-            dca_chg_1h_min=dca_chg_1h_min,
-            dca_chg_1h_max=dca_chg_1h_max,
-            dca_chg_4h_min=dca_chg_4h_min,
-            dca_chg_4h_max=dca_chg_4h_max,
-            chg_30m_exit_buffer=chg_30m_exit_buffer,
-            chg_1h_exit_buffer=chg_1h_exit_buffer,
-            chg_4h_exit_buffer=chg_4h_exit_buffer,
-            dca_reentry_min_profit=dca_reentry_min_profit,
-            dca_reentry_max_drawdown=dca_reentry_max_drawdown,
+            **deploy_strategy_kwargs,
             reset_user_data=mode_switched,
         )
     except HTTPException as exc:
@@ -3455,6 +3916,17 @@ def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayloa
 
     dca_reentry_min_profit = max(-1.0, min(0.0, float(payload.dca_reentry_min_profit)))
     dca_reentry_max_drawdown = max(-1.0, min(0.0, float(payload.dca_reentry_max_drawdown)))
+    dca2_reentry_min_profit = max(-1.0, min(0.0, float(payload.dca2_reentry_min_profit)))
+    dca2_reentry_max_drawdown = max(-1.0, min(0.0, float(payload.dca2_reentry_max_drawdown)))
+
+    def _clamp_int(value: int, lo: int, hi: int) -> int:
+        return max(lo, min(hi, int(value)))
+
+    def _clamp_ratio(value: float) -> float:
+        return max(0.01, min(1.0, float(value)))
+
+    def _clamp_rsi(value: float) -> float:
+        return max(0.0, min(100.0, float(value)))
 
     patch: dict[str, Any] = {
         "trade_type": trade_type,
@@ -3464,31 +3936,49 @@ def update_bot_setup_settings(bot_id: str, payload: UpdateBotSetupSettingsPayloa
         "max_open_order": max_open_order,
         "stoploss_pct": stoploss_pct,
         "dca_stoploss_pct": dca_stoploss_pct,
-        "entry_30m_enabled": bool(payload.entry_30m_enabled),
-        "entry_1h_enabled": bool(payload.entry_1h_enabled),
-        "entry_4h_enabled": bool(payload.entry_4h_enabled),
+        "leverage": leverage,
+        # DCA core
+        "max_dca_multiplier": _clamp_int(payload.max_dca_multiplier, 0, 10),
+        "max_dca_orders_open": _clamp_int(payload.max_dca_orders_open, 0, 10),
+        "initial_entry_stake_ratio": _clamp_ratio(payload.initial_entry_stake_ratio),
+        "dca_entry_stake_ratio": _clamp_ratio(payload.dca_entry_stake_ratio),
+        "shift_lookback": _clamp_int(payload.shift_lookback, 1, 100),
+        # Per-TF entry toggles
+        **{f"entry_{tf}_{sig}_enabled": bool(getattr(payload, f"entry_{tf}_{sig}_enabled"))
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for sig in ("long", "shift_long", "short", "shift_short")},
+        # Per-TF RSI
+        **{f"entry_{tf}_rsi_{side}": _clamp_rsi(getattr(payload, f"entry_{tf}_rsi_{side}"))
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for side in ("long", "short")},
+        # Cross-TF RSI
+        **{f"entry_5m_rsi_{side}_{htf}": _clamp_rsi(getattr(payload, f"entry_5m_rsi_{side}_{htf}"))
+           for htf in ("15m", "30m", "1h", "4h")
+           for side in ("long", "short")},
+        # CHG filter
         "use_chg_filter": bool(payload.use_chg_filter),
-        "chg_30m_enabled": bool(payload.chg_30m_enabled),
-        "chg_1h_enabled": bool(payload.chg_1h_enabled),
-        "chg_4h_enabled": bool(payload.chg_4h_enabled),
-        "chg_30m_min": _clamp_chg(payload.chg_30m_min),
-        "chg_30m_max": _clamp_chg(payload.chg_30m_max),
-        "chg_1h_min": _clamp_chg(payload.chg_1h_min),
-        "chg_1h_max": _clamp_chg(payload.chg_1h_max),
-        "chg_4h_min": _clamp_chg(payload.chg_4h_min),
-        "chg_4h_max": _clamp_chg(payload.chg_4h_max),
-        "dca_chg_30m_min": _clamp_chg(payload.dca_chg_30m_min),
-        "dca_chg_30m_max": _clamp_chg(payload.dca_chg_30m_max),
-        "dca_chg_1h_min": _clamp_chg(payload.dca_chg_1h_min),
-        "dca_chg_1h_max": _clamp_chg(payload.dca_chg_1h_max),
-        "dca_chg_4h_min": _clamp_chg(payload.dca_chg_4h_min),
-        "dca_chg_4h_max": _clamp_chg(payload.dca_chg_4h_max),
-        "chg_30m_exit_buffer": _clamp_buffer(payload.chg_30m_exit_buffer),
-        "chg_1h_exit_buffer": _clamp_buffer(payload.chg_1h_exit_buffer),
-        "chg_4h_exit_buffer": _clamp_buffer(payload.chg_4h_exit_buffer),
+        "use_chg_exit_buffer": bool(payload.use_chg_exit_buffer),
+        **{k: (bool(getattr(payload, k)) if "enabled" in k else
+               (_clamp_buffer(getattr(payload, k)) if "buffer" in k else _clamp_chg(getattr(payload, k))))
+           for tf in ("5m", "15m", "30m", "1h", "4h")
+           for k in (
+               f"chg_{tf}_enabled", f"chg_{tf}_min", f"chg_{tf}_max",
+               f"dca_chg_{tf}_min", f"dca_chg_{tf}_max",
+               f"chg_{tf}_exit_buffer_enabled", f"chg_{tf}_exit_buffer",
+           )},
+        # DCA re-entry
         "dca_reentry_min_profit": dca_reentry_min_profit,
         "dca_reentry_max_drawdown": dca_reentry_max_drawdown,
-        "leverage": leverage,
+        "dca2_reentry_min_profit": dca2_reentry_min_profit,
+        "dca2_reentry_max_drawdown": dca2_reentry_max_drawdown,
+        # Volatility guard
+        "dca_sudden_chg_guard_enabled": bool(payload.dca_sudden_chg_guard_enabled),
+        "dca_sudden_chg_threshold": _clamp_buffer(payload.dca_sudden_chg_threshold),
+        "dca_sudden_chg_lookback": _clamp_int(payload.dca_sudden_chg_lookback, 1, 100),
+        # Telegram
+        "telegram_chg_alert_enabled": bool(payload.telegram_chg_alert_enabled),
+        "telegram_chg_min": _clamp_chg(payload.telegram_chg_min),
+        "telegram_chg_max": _clamp_chg(payload.telegram_chg_max),
     }
 
     updated = update_bot_setup_state(user["id"], bot_id, patch)
@@ -3875,3 +4365,712 @@ def list_containers(all: bool = False) -> list[dict[str, str]]:
         ]
     except DockerException as exc:
         raise HTTPException(status_code=503, detail=f"Docker unavailable: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Admin – Freqtrade file management
+# ---------------------------------------------------------------------------
+
+_FREQTRADE_BASE = pathlib.Path("/app/freqtrade")
+
+_FREQTRADE_FILE_MAP: dict[str, pathlib.Path] = {
+    "strategy": _FREQTRADE_BASE / "user_data" / "strategies" / "BotPrimeX.py",
+    "config": _FREQTRADE_BASE / "user_data" / "config.json",
+    "docker-compose": _FREQTRADE_BASE / "docker-compose.yml",
+    "strategy-template": pathlib.Path("/app/app/strategy_templates/BotPrimeX.py"),
+}
+
+
+def _ft_file_info(key: str, path: pathlib.Path) -> dict[str, Any]:
+    exists = path.is_file()
+    stat = path.stat() if exists else None
+    return {
+        "key": key,
+        "path": str(path),
+        "exists": exists,
+        "size": stat.st_size if stat else 0,
+        "modified": stat.st_mtime if stat else None,
+    }
+
+
+@app.get("/admin/freqtrade/files")
+def admin_ft_list_files() -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for key, path in _FREQTRADE_FILE_MAP.items():
+        results.append(_ft_file_info(key, path))
+    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
+    if strat_dir.is_dir():
+        for f in sorted(strat_dir.iterdir()):
+            if f.is_file() and f.suffix == ".py" and f.name != "BotPrimeX.py":
+                extra_key = f"strategy:{f.name}"
+                results.append(_ft_file_info(extra_key, f))
+    return results
+
+
+@app.get("/admin/freqtrade/files/{file_key:path}")
+def admin_ft_read_file(file_key: str) -> dict[str, Any]:
+    if file_key.startswith("strategy:"):
+        fname = file_key.split(":", 1)[1]
+        if "/" in fname or "\\" in fname or ".." in fname:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+    elif file_key in _FREQTRADE_FILE_MAP:
+        path = _FREQTRADE_FILE_MAP[file_key]
+    else:
+        raise HTTPException(status_code=404, detail=f"Unknown file key: {file_key}")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Read error: {exc}") from exc
+    stat = path.stat()
+    return {"key": file_key, "path": str(path), "content": content, "size": stat.st_size, "modified": stat.st_mtime}
+
+
+class FreqtradeFilePayload(BaseModel):
+    content: str
+
+
+@app.put("/admin/freqtrade/files/{file_key:path}")
+def admin_ft_write_file(file_key: str, payload: FreqtradeFilePayload) -> dict[str, Any]:
+    if file_key.startswith("strategy:"):
+        fname = file_key.split(":", 1)[1]
+        if "/" in fname or "\\" in fname or ".." in fname:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+    elif file_key in _FREQTRADE_FILE_MAP:
+        path = _FREQTRADE_FILE_MAP[file_key]
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown file key: {file_key}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.write_text(payload.content, encoding="utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Write error: {exc}") from exc
+    return {"ok": True, **_ft_file_info(file_key, path)}
+
+
+@app.delete("/admin/freqtrade/files/{file_key:path}")
+def admin_ft_delete_file(file_key: str) -> dict[str, str]:
+    if file_key in ("config", "docker-compose", "strategy", "strategy-template"):
+        raise HTTPException(status_code=403, detail="Core files cannot be deleted")
+    if not file_key.startswith("strategy:"):
+        raise HTTPException(status_code=400, detail="Only extra strategy files can be deleted")
+    fname = file_key.split(":", 1)[1]
+    if "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    path.unlink()
+    return {"ok": "deleted", "key": file_key}
+
+
+class FreqtradeUploadStrategyPayload(BaseModel):
+    filename: str
+    content: str
+
+
+@app.post("/admin/freqtrade/strategies/upload")
+def admin_ft_upload_strategy(payload: FreqtradeUploadStrategyPayload) -> dict[str, Any]:
+    fname = payload.filename.strip()
+    if not fname.endswith(".py") or "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="Invalid strategy filename (must be .py)")
+    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
+    strat_dir.mkdir(parents=True, exist_ok=True)
+    path = strat_dir / fname
+    path.write_text(payload.content, encoding="utf-8")
+    key = f"strategy:{fname}" if fname != "BotPrimeX.py" else "strategy"
+    return {"ok": True, **_ft_file_info(key, path)}
+
+
+# ── Apply freqtrade file changes to all active bots ────────────────────
+
+
+def _build_bot_strategy_code(bot_row: dict[str, Any], master_code: str) -> str:
+    """Apply a bot's saved parameters from metadata_json to the master strategy code."""
+    ss = _normalize_strategy_settings(bot_row)
+    return _apply_strategy_runtime_settings(
+        master_code,
+        dca_enabled=ss["dca_enabled"],
+        stoploss_value=ss["stoploss_pct"],
+        dca_stoploss_value=ss["dca_stoploss_pct"],
+        leverage_value=ss["leverage"],
+        max_dca_multiplier=ss["max_dca_multiplier"],
+        max_dca_orders_open=ss["max_dca_orders_open"],
+        initial_entry_stake_ratio=ss["initial_entry_stake_ratio"],
+        dca_entry_stake_ratio=ss["dca_entry_stake_ratio"],
+        shift_lookback=ss["shift_lookback"],
+        entry_5m_long_enabled=ss["entry_5m_long_enabled"],
+        entry_5m_shift_long_enabled=ss["entry_5m_shift_long_enabled"],
+        entry_5m_short_enabled=ss["entry_5m_short_enabled"],
+        entry_5m_shift_short_enabled=ss["entry_5m_shift_short_enabled"],
+        entry_15m_long_enabled=ss["entry_15m_long_enabled"],
+        entry_15m_shift_long_enabled=ss["entry_15m_shift_long_enabled"],
+        entry_15m_short_enabled=ss["entry_15m_short_enabled"],
+        entry_15m_shift_short_enabled=ss["entry_15m_shift_short_enabled"],
+        entry_30m_long_enabled=ss["entry_30m_long_enabled"],
+        entry_30m_shift_long_enabled=ss["entry_30m_shift_long_enabled"],
+        entry_30m_short_enabled=ss["entry_30m_short_enabled"],
+        entry_30m_shift_short_enabled=ss["entry_30m_shift_short_enabled"],
+        entry_1h_long_enabled=ss["entry_1h_long_enabled"],
+        entry_1h_shift_long_enabled=ss["entry_1h_shift_long_enabled"],
+        entry_1h_short_enabled=ss["entry_1h_short_enabled"],
+        entry_1h_shift_short_enabled=ss["entry_1h_shift_short_enabled"],
+        entry_4h_long_enabled=ss["entry_4h_long_enabled"],
+        entry_4h_shift_long_enabled=ss["entry_4h_shift_long_enabled"],
+        entry_4h_short_enabled=ss["entry_4h_short_enabled"],
+        entry_4h_shift_short_enabled=ss["entry_4h_shift_short_enabled"],
+        entry_5m_rsi_long=ss["entry_5m_rsi_long"],
+        entry_5m_rsi_short=ss["entry_5m_rsi_short"],
+        entry_15m_rsi_long=ss["entry_15m_rsi_long"],
+        entry_15m_rsi_short=ss["entry_15m_rsi_short"],
+        entry_30m_rsi_long=ss["entry_30m_rsi_long"],
+        entry_30m_rsi_short=ss["entry_30m_rsi_short"],
+        entry_1h_rsi_long=ss["entry_1h_rsi_long"],
+        entry_1h_rsi_short=ss["entry_1h_rsi_short"],
+        entry_4h_rsi_long=ss["entry_4h_rsi_long"],
+        entry_4h_rsi_short=ss["entry_4h_rsi_short"],
+        entry_5m_rsi_long_15m=ss["entry_5m_rsi_long_15m"],
+        entry_5m_rsi_short_15m=ss["entry_5m_rsi_short_15m"],
+        entry_5m_rsi_long_30m=ss["entry_5m_rsi_long_30m"],
+        entry_5m_rsi_short_30m=ss["entry_5m_rsi_short_30m"],
+        entry_5m_rsi_long_1h=ss["entry_5m_rsi_long_1h"],
+        entry_5m_rsi_short_1h=ss["entry_5m_rsi_short_1h"],
+        entry_5m_rsi_long_4h=ss["entry_5m_rsi_long_4h"],
+        entry_5m_rsi_short_4h=ss["entry_5m_rsi_short_4h"],
+        use_chg_filter=ss["use_chg_filter"],
+        use_chg_exit_buffer=ss["use_chg_exit_buffer"],
+        chg_5m_enabled=ss["chg_5m_enabled"],
+        chg_5m_min=ss["chg_5m_min"],
+        chg_5m_max=ss["chg_5m_max"],
+        dca_chg_5m_min=ss["dca_chg_5m_min"],
+        dca_chg_5m_max=ss["dca_chg_5m_max"],
+        chg_5m_exit_buffer_enabled=ss["chg_5m_exit_buffer_enabled"],
+        chg_5m_exit_buffer=ss["chg_5m_exit_buffer"],
+        chg_15m_enabled=ss["chg_15m_enabled"],
+        chg_15m_min=ss["chg_15m_min"],
+        chg_15m_max=ss["chg_15m_max"],
+        dca_chg_15m_min=ss["dca_chg_15m_min"],
+        dca_chg_15m_max=ss["dca_chg_15m_max"],
+        chg_15m_exit_buffer_enabled=ss["chg_15m_exit_buffer_enabled"],
+        chg_15m_exit_buffer=ss["chg_15m_exit_buffer"],
+        chg_30m_enabled=ss["chg_30m_enabled"],
+        chg_30m_min=ss["chg_30m_min"],
+        chg_30m_max=ss["chg_30m_max"],
+        dca_chg_30m_min=ss["dca_chg_30m_min"],
+        dca_chg_30m_max=ss["dca_chg_30m_max"],
+        chg_30m_exit_buffer_enabled=ss["chg_30m_exit_buffer_enabled"],
+        chg_30m_exit_buffer=ss["chg_30m_exit_buffer"],
+        chg_1h_enabled=ss["chg_1h_enabled"],
+        chg_1h_min=ss["chg_1h_min"],
+        chg_1h_max=ss["chg_1h_max"],
+        dca_chg_1h_min=ss["dca_chg_1h_min"],
+        dca_chg_1h_max=ss["dca_chg_1h_max"],
+        chg_1h_exit_buffer_enabled=ss["chg_1h_exit_buffer_enabled"],
+        chg_1h_exit_buffer=ss["chg_1h_exit_buffer"],
+        chg_4h_enabled=ss["chg_4h_enabled"],
+        chg_4h_min=ss["chg_4h_min"],
+        chg_4h_max=ss["chg_4h_max"],
+        dca_chg_4h_min=ss["dca_chg_4h_min"],
+        dca_chg_4h_max=ss["dca_chg_4h_max"],
+        chg_4h_exit_buffer_enabled=ss["chg_4h_exit_buffer_enabled"],
+        chg_4h_exit_buffer=ss["chg_4h_exit_buffer"],
+        dca_reentry_min_profit=ss["dca_reentry_min_profit"],
+        dca_reentry_max_drawdown=ss["dca_reentry_max_drawdown"],
+        dca2_reentry_min_profit=ss["dca2_reentry_min_profit"],
+        dca2_reentry_max_drawdown=ss["dca2_reentry_max_drawdown"],
+        dca_sudden_chg_guard_enabled=ss["dca_sudden_chg_guard_enabled"],
+        dca_sudden_chg_threshold=ss["dca_sudden_chg_threshold"],
+        dca_sudden_chg_lookback=ss["dca_sudden_chg_lookback"],
+        telegram_chg_alert_enabled=ss["telegram_chg_alert_enabled"],
+        telegram_chg_min=ss["telegram_chg_min"],
+        telegram_chg_max=ss["telegram_chg_max"],
+    )
+
+
+class ApplyToBotsPayload(BaseModel):
+    file_keys: list[str] | None = None  # None = strategy only
+
+
+# Keys in config.json that are bot-specific and must NEVER be overwritten by master
+_BOT_SPECIFIC_CONFIG_KEYS = {"exchange", "api_server", "dry_run", "dry_run_wallet", "bot_name"}
+
+
+def _build_bot_config_json(bot_row: dict[str, Any], master_config: dict[str, Any]) -> dict[str, Any]:
+    """Build a per-bot config.json by merging master config with bot-specific values.
+
+    Priority: bot-specific DB values > master config values > defaults.
+    Bot-specific keys (exchange, api_server, dry_run, bot_name) are NEVER overwritten.
+    """
+    bot_id = str(bot_row.get("bot_id") or "")
+    metadata = bot_row.get("metadata_json") if isinstance(bot_row.get("metadata_json"), dict) else {}
+    existing_config = bot_row.get("config_json") if isinstance(bot_row.get("config_json"), dict) else {}
+
+    # Start from master config (general settings like pairlists, order_types, etc.)
+    merged = json.loads(json.dumps(master_config))  # deep copy
+
+    # Restore bot-specific keys from existing stored config (or keep master's if no stored config)
+    for key in _BOT_SPECIFIC_CONFIG_KEYS:
+        if key in existing_config:
+            merged[key] = existing_config[key]
+
+    # Apply bot parameters from metadata_json
+    ss = _normalize_strategy_settings(bot_row)
+    merged["max_open_trades"] = ss.get("max_open_order", merged.get("max_open_trades", 15))
+    stake = ss.get("stake_amount", None)
+    if stake and stake != "unlimited":
+        try:
+            merged["stake_amount"] = float(stake) if float(stake) > 0 else merged.get("stake_amount", "unlimited")
+        except (TypeError, ValueError):
+            pass
+
+    # Ensure bot_name is set
+    if "bot_name" not in merged or not merged["bot_name"]:
+        merged["bot_name"] = f"pp-{bot_id[-8:]}" if bot_id else "freqtrade"
+
+    return merged
+
+
+@app.post("/admin/freqtrade/apply-to-bots")
+def admin_ft_apply_to_bots(payload: ApplyToBotsPayload | None = None) -> dict[str, Any]:
+    """Push master freqtrade files to every active bot server and reload."""
+    from .database import list_bot_accounts as _list_bots, save_bot_config as _save_config
+    from .freqtrade import _resolve, _ft_request
+
+    file_keys = (payload.file_keys if payload and payload.file_keys else None) or ["strategy"]
+    deploy_dir = str(settings.freqtrade_deploy_dir or "/opt/botprimex-freqtrade").strip() or "/opt/botprimex-freqtrade"
+    push_strategy = "strategy" in file_keys
+    push_config = "config" in file_keys
+
+    # Read master strategy code once if strategy is in the push list
+    master_strategy_code = ""
+    strategy_filename = ""
+    if push_strategy:
+        strat_path = _FREQTRADE_FILE_MAP["strategy"]
+        if strat_path.is_file():
+            master_strategy_code = strat_path.read_text(encoding="utf-8")
+            strategy_filename = strat_path.name
+
+    # Read master config once if config is in the push list
+    master_config: dict[str, Any] = {}
+    if push_config:
+        config_path = _FREQTRADE_FILE_MAP["config"]
+        if config_path.is_file():
+            try:
+                master_config = json.loads(config_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError):
+                master_config = {}
+
+    # Collect non-strategy, non-config source files to push (docker-compose, extra strategies)
+    files_to_push: list[tuple[str, pathlib.Path, str]] = []  # (key, local_path, remote_relative)
+    for key in file_keys:
+        if key in ("strategy", "config"):
+            continue  # Handled per-bot
+        elif key == "docker-compose":
+            local = _FREQTRADE_FILE_MAP["docker-compose"]
+            files_to_push.append((key, local, "docker-compose.yml"))
+        elif key == "strategy-template":
+            continue  # Template only affects new deployments
+        elif key.startswith("strategy:"):
+            fname = key.split(":", 1)[1]
+            local = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+            if local.is_file():
+                files_to_push.append((key, local, f"user_data/strategies/{fname}"))
+
+    if not files_to_push and not push_strategy and not push_config:
+        return {"ok": True, "bots": [], "message": "No applicable files to push"}
+
+    all_bots = _list_bots()
+    results: list[dict[str, Any]] = []
+    needs_compose_recreate = "docker-compose" in file_keys
+
+    for bot_row in all_bots:
+        bot_id = str(bot_row.get("bot_id") or "")
+        metadata = bot_row.get("metadata_json") if isinstance(bot_row.get("metadata_json"), dict) else {}
+        setup_status = str(metadata.get("setup_status") or "").lower()
+        server_ip = str(metadata.get("setup_server_ip") or "").strip()
+        freqtrade_url = str(bot_row.get("freqtrade_url") or "").strip()
+
+        if setup_status != "completed" or not freqtrade_url:
+            continue
+
+        bot_result: dict[str, Any] = {"bot_id": bot_id, "bot_name": bot_row.get("bot_name", bot_id), "files_pushed": [], "errors": []}
+
+        # Build per-bot strategy with injected parameters
+        bot_strategy_path: pathlib.Path | None = None
+        if push_strategy and master_strategy_code and strategy_filename:
+            try:
+                customized_code = _build_bot_strategy_code(bot_row, master_strategy_code)
+                bot_strategy_path = pathlib.Path(tempfile.gettempdir()) / f"strategy_{bot_id}_{strategy_filename}"
+                bot_strategy_path.write_text(customized_code, encoding="utf-8")
+            except Exception as exc:
+                bot_result["errors"].append(f"Parameter injection: {exc}")
+                bot_strategy_path = None
+
+        # Build per-bot config with preserved bot-specific keys
+        bot_config_path: pathlib.Path | None = None
+        if push_config and master_config:
+            try:
+                bot_config = _build_bot_config_json(bot_row, master_config)
+                bot_config_path = pathlib.Path(tempfile.gettempdir()) / f"config_{bot_id}.json"
+                bot_config_path.write_text(json.dumps(bot_config, indent=2), encoding="utf-8")
+                # Persist to DB
+                _save_config(bot_id, bot_config)
+                bot_result["config_preserved"] = True
+            except Exception as exc:
+                bot_result["errors"].append(f"Config build: {exc}")
+                bot_config_path = None
+
+        # Push files via SCP if bot has a server IP
+        if server_ip:
+            ok, msg = _deploy_prerequisites_status()
+            if ok:
+                for key, local_path, remote_rel in files_to_push:
+                    remote_path = f"{deploy_dir}/{remote_rel}"
+                    try:
+                        remote_dir = "/".join(remote_path.split("/")[:-1])
+                        _run_remote_command(server_ip, f"mkdir -p {shlex.quote(remote_dir)}", timeout=30)
+                        key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+                        user = str(settings.deploy_ssh_user or "root").strip() or "root"
+                        port = int(settings.deploy_ssh_port or 22)
+                        scp_cmd = [
+                            "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                            "-P", str(port), "-i", key_path,
+                            str(local_path), f"{user}@{server_ip}:{remote_path}",
+                        ]
+                        result = _run_command(scp_cmd, timeout=60)
+                        if result.returncode == 0:
+                            bot_result["files_pushed"].append(key)
+                        else:
+                            stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+                            bot_result["errors"].append(f"SCP {key}: {stderr or 'failed'}")
+                    except Exception as exc:
+                        bot_result["errors"].append(f"SCP {key}: {exc}")
+
+                # Push per-bot config
+                if bot_config_path and bot_config_path.is_file():
+                    remote_path = f"{deploy_dir}/user_data/config.json"
+                    try:
+                        key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+                        user = str(settings.deploy_ssh_user or "root").strip() or "root"
+                        port = int(settings.deploy_ssh_port or 22)
+                        scp_cmd = [
+                            "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                            "-P", str(port), "-i", key_path,
+                            str(bot_config_path), f"{user}@{server_ip}:{remote_path}",
+                        ]
+                        result = _run_command(scp_cmd, timeout=60)
+                        if result.returncode == 0:
+                            bot_result["files_pushed"].append("config")
+                        else:
+                            stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+                            bot_result["errors"].append(f"SCP config: {stderr or 'failed'}")
+                    except Exception as exc:
+                        bot_result["errors"].append(f"SCP config: {exc}")
+
+                # Push per-bot strategy with injected parameters
+                if bot_strategy_path and bot_strategy_path.is_file():
+                    remote_path = f"{deploy_dir}/user_data/strategies/{strategy_filename}"
+                    try:
+                        remote_dir = f"{deploy_dir}/user_data/strategies"
+                        _run_remote_command(server_ip, f"mkdir -p {shlex.quote(remote_dir)}", timeout=30)
+                        key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+                        user = str(settings.deploy_ssh_user or "root").strip() or "root"
+                        port = int(settings.deploy_ssh_port or 22)
+                        scp_cmd = [
+                            "scp", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+                            "-P", str(port), "-i", key_path,
+                            str(bot_strategy_path), f"{user}@{server_ip}:{remote_path}",
+                        ]
+                        result = _run_command(scp_cmd, timeout=60)
+                        if result.returncode == 0:
+                            bot_result["files_pushed"].append("strategy")
+                            bot_result["params_injected"] = True
+                        else:
+                            stderr = result.stderr.decode("utf-8", errors="ignore").strip()
+                            bot_result["errors"].append(f"SCP strategy: {stderr or 'failed'}")
+                    except Exception as exc:
+                        bot_result["errors"].append(f"SCP strategy: {exc}")
+
+                # Recreate container if docker-compose was pushed
+                if needs_compose_recreate and "docker-compose" in [fp[0] for fp in files_to_push if fp[0] in bot_result["files_pushed"]]:
+                    try:
+                        _run_remote_command(server_ip, f"cd {shlex.quote(deploy_dir)} && docker compose up -d --force-recreate", timeout=120)
+                        bot_result["restarted"] = True
+                    except Exception as exc:
+                        bot_result["errors"].append(f"Restart: {exc}")
+            else:
+                bot_result["errors"].append(f"SSH not available: {msg}")
+        else:
+            # No server IP — bot might be local (same machine), files already updated
+            bot_result["files_pushed"] = [key for key, _, _ in files_to_push]
+            if push_strategy:
+                bot_result["files_pushed"].append("strategy")
+                bot_result["params_injected"] = True
+            if push_config:
+                bot_result["files_pushed"].append("config")
+                bot_result["config_preserved"] = True
+            bot_result["local"] = True
+
+        # Clean up temp files
+        for tmp in (bot_strategy_path, bot_config_path):
+            if tmp and tmp.is_file():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+
+        # Reload config via freqtrade API (reloads both config and strategy)
+        if not needs_compose_recreate or not bot_result.get("restarted"):
+            try:
+                bot_ref = _resolve(bot_id)
+                _ft_request(bot_ref, "reload_config", method="POST", payload={})
+                bot_result["reloaded"] = True
+            except Exception as exc:
+                bot_result["errors"].append(f"Reload: {exc}")
+
+        results.append(bot_result)
+
+    total = len(results)
+    ok_count = sum(1 for r in results if not r["errors"])
+    return {"ok": ok_count == total, "total": total, "success": ok_count, "failed": total - ok_count, "bots": results}
+
+
+# ── Freqtrade deploy settings management ───────────────────────────────
+
+_ENV_FILE = pathlib.Path("/app/.env")
+
+_DEPLOY_SETTINGS_KEYS: dict[str, str] = {
+    # Freqtrade deploy
+    "deploy_dir": "BACKEND_FREQTRADE_DEPLOY_DIR",
+    "deploy_image": "BACKEND_FREQTRADE_DEPLOY_IMAGE",
+    "deploy_api_port": "BACKEND_FREQTRADE_DEPLOY_API_PORT",
+    "usernames": "BACKEND_FREQTRADE_USERNAMES",
+    "passwords": "BACKEND_FREQTRADE_PASSWORDS",
+    "default_strategy": "BACKEND_FREQTRADE_DEFAULT_STRATEGY",
+    # SSH
+    "deploy_ssh_user": "BACKEND_DEPLOY_SSH_USER",
+    "deploy_ssh_port": "BACKEND_DEPLOY_SSH_PORT",
+    "deploy_ssh_private_key_path": "BACKEND_DEPLOY_SSH_PRIVATE_KEY_PATH",
+    # Hetzner
+    "hetzner_api_token": "BACKEND_HETZNER_API_TOKEN",
+    "hetzner_datacenter": "BACKEND_HETZNER_DATACENTER",
+    "hetzner_server_type": "BACKEND_HETZNER_SERVER_TYPE",
+    "hetzner_image": "BACKEND_HETZNER_IMAGE",
+    "hetzner_ssh_keys": "BACKEND_HETZNER_SSH_KEYS",
+    "hetzner_root_password": "BACKEND_HETZNER_ROOT_PASSWORD",
+}
+
+
+def _read_env_file() -> dict[str, str]:
+    """Parse the .env file into a dict."""
+    result: dict[str, str] = {}
+    if not _ENV_FILE.is_file():
+        return result
+    for line in _ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line:
+            key, _, value = line.partition("=")
+            result[key.strip()] = value.strip()
+    return result
+
+
+def _write_env_file(env: dict[str, str]) -> None:
+    """Write env dict back to .env preserving comments and order, appending new keys."""
+    if not _ENV_FILE.is_file():
+        lines_out = [f"{k}={v}" for k, v in env.items()]
+        _ENV_FILE.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+        return
+
+    original = _ENV_FILE.read_text(encoding="utf-8")
+    written_keys: set[str] = set()
+    lines_out: list[str] = []
+
+    for line in original.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            lines_out.append(line)
+            continue
+        if "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in env:
+                lines_out.append(f"{key}={env[key]}")
+                written_keys.add(key)
+            else:
+                lines_out.append(line)
+        else:
+            lines_out.append(line)
+
+    for key, value in env.items():
+        if key not in written_keys:
+            lines_out.append(f"{key}={value}")
+
+    _ENV_FILE.write_text("\n".join(lines_out) + "\n", encoding="utf-8")
+
+
+@app.get("/admin/freqtrade/deploy-settings")
+def admin_ft_deploy_settings() -> dict[str, Any]:
+    """Return current deploy settings from DB, falling back to runtime defaults."""
+    from .database import get_deploy_settings as _get_ds
+
+    db_settings = _get_ds()
+
+    # Runtime defaults for any key not stored in DB yet
+    _defaults: dict[str, str] = {
+        "deploy_dir": str(settings.freqtrade_deploy_dir or "/opt/botprimex-freqtrade"),
+        "deploy_image": str(settings.freqtrade_deploy_image or "freqtradeorg/freqtrade:stable"),
+        "deploy_api_port": str(settings.freqtrade_deploy_api_port or 18080),
+        "usernames": str(settings.freqtrade_usernames or "admin"),
+        "passwords": str(settings.freqtrade_passwords or "admin"),
+        "deploy_ssh_user": str(settings.deploy_ssh_user or "root"),
+        "deploy_ssh_port": str(settings.deploy_ssh_port or 22),
+        "deploy_ssh_private_key_path": str(settings.deploy_ssh_private_key_path or ""),
+        "default_strategy": str(settings.freqtrade_default_strategy or ""),
+        "hetzner_api_token": str(settings.hetzner_api_token or ""),
+        "hetzner_datacenter": str(settings.hetzner_datacenter or "nbg1-dc3"),
+        "hetzner_server_type": str(settings.hetzner_server_type or "cx22"),
+        "hetzner_image": str(settings.hetzner_image or "ubuntu-22.04"),
+        "hetzner_ssh_keys": str(settings.hetzner_ssh_keys or ""),
+        "hetzner_root_password": str(settings.hetzner_root_password or ""),
+    }
+
+    current: dict[str, str] = {}
+    for ui_key in _DEPLOY_SETTINGS_KEYS:
+        current[ui_key] = str(db_settings.get(ui_key, "") or _defaults.get(ui_key, ""))
+
+    # SSH key status
+    key_path = str(current.get("deploy_ssh_private_key_path") or settings.deploy_ssh_private_key_path or "").strip()
+    ssh_key_exists = bool(key_path and os.path.isfile(key_path))
+
+    # List available strategies from the freqtrade directory
+    strategies: list[dict[str, str]] = []
+    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
+    if strat_dir.is_dir():
+        for f in sorted(strat_dir.iterdir()):
+            if f.suffix == ".py" and f.is_file():
+                strategies.append({"filename": f.name, "name": f.stem})
+
+    # Also list strategy templates
+    template_dir = pathlib.Path("/app/app/strategy_templates")
+    templates: list[dict[str, str]] = []
+    if template_dir.is_dir():
+        for f in sorted(template_dir.iterdir()):
+            if f.suffix == ".py" and f.is_file():
+                templates.append({"filename": f.name, "name": f.stem})
+
+    return {"settings": current, "strategies": strategies, "templates": templates, "ssh_key_exists": ssh_key_exists}
+
+
+class DeploySettingsPayload(BaseModel):
+    deploy_dir: str | None = None
+    deploy_image: str | None = None
+    deploy_api_port: str | None = None
+    usernames: str | None = None
+    passwords: str | None = None
+    deploy_ssh_user: str | None = None
+    deploy_ssh_port: str | None = None
+    deploy_ssh_private_key_path: str | None = None
+    default_strategy: str | None = None
+    hetzner_api_token: str | None = None
+    hetzner_datacenter: str | None = None
+    hetzner_server_type: str | None = None
+    hetzner_image: str | None = None
+    hetzner_ssh_keys: str | None = None
+    hetzner_root_password: str | None = None
+
+
+@app.put("/admin/freqtrade/deploy-settings")
+def admin_ft_update_deploy_settings(payload: DeploySettingsPayload) -> dict[str, Any]:
+    """Save deploy settings to DB + .env. Auto-apply freqtrade changes to all active bots."""
+    from .database import get_deploy_settings as _get_ds, save_deploy_settings as _save_ds
+
+    old_settings = _get_ds()
+    updates: dict[str, str] = {}
+
+    for ui_key in _DEPLOY_SETTINGS_KEYS:
+        value = getattr(payload, ui_key, None)
+        if value is not None:
+            updates[ui_key] = value
+
+    if not updates:
+        return {"ok": True, "message": "No changes"}
+
+    # Merge into DB settings and persist
+    merged = {**old_settings, **updates}
+    _save_ds(merged)
+
+    # Also write to .env for backward compatibility (settings.py reads from env)
+    env = _read_env_file()
+    for ui_key, value in updates.items():
+        env_key = _DEPLOY_SETTINGS_KEYS.get(ui_key)
+        if env_key:
+            env[env_key] = value
+    _write_env_file(env)
+
+    # Detect if any freqtrade-specific settings changed (not hetzner)
+    _FREQTRADE_KEYS = {"deploy_dir", "deploy_image", "deploy_api_port", "usernames", "passwords", "default_strategy"}
+    ft_changed = any(
+        k in _FREQTRADE_KEYS and str(updates.get(k, "")) != str(old_settings.get(k, ""))
+        for k in updates
+    )
+
+    apply_result = None
+    if ft_changed:
+        try:
+            apply_result = admin_ft_apply_to_bots(None)
+        except Exception as exc:
+            apply_result = {"ok": False, "error": str(exc), "bots": []}
+
+    return {
+        "ok": True,
+        "updated": updates,
+        "restart_required": True,
+        "ft_applied": ft_changed,
+        "apply_result": apply_result,
+    }
+
+
+# ── SSH Key management ──────────────────────────────────────────────────
+
+class SSHKeyPayload(BaseModel):
+    content: str
+
+
+@app.get("/admin/freqtrade/ssh-key")
+def admin_ft_ssh_key_status() -> dict[str, Any]:
+    key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+    if not key_path:
+        return {"exists": False, "path": "", "size": 0}
+    exists = os.path.isfile(key_path)
+    size = os.path.getsize(key_path) if exists else 0
+    return {"exists": exists, "path": key_path, "size": size}
+
+
+@app.put("/admin/freqtrade/ssh-key")
+def admin_ft_ssh_key_upload(payload: SSHKeyPayload) -> dict[str, Any]:
+    key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+    if not key_path:
+        key_path = "/app/storage/deploy_ssh_key"
+        # Update env file with the new path
+        env = _read_env_file()
+        env["BACKEND_DEPLOY_SSH_PRIVATE_KEY_PATH"] = key_path
+        _write_env_file(env)
+
+    p = pathlib.Path(key_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    content = payload.content.strip()
+    if not content.startswith("-----BEGIN"):
+        raise HTTPException(status_code=400, detail="Invalid SSH private key format")
+
+    # Ensure trailing newline
+    if not content.endswith("\n"):
+        content += "\n"
+
+    p.write_text(content, encoding="utf-8")
+    os.chmod(key_path, 0o600)
+    return {"ok": True, "path": key_path, "size": p.stat().st_size}

@@ -1,4 +1,14 @@
 @tailwind base;
+
+/* Prevent white flash before theme hydration */
+html:not(.light) {
+  background-color: hsl(221, 39%, 11%);
+  color-scheme: dark;
+}
+html.light {
+  background-color: hsl(0, 0%, 100%);
+  color-scheme: light;
+}
 @tailwind components;
 @tailwind utilities;
 

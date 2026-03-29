@@ -31,44 +31,60 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const res = await fetchBackend("/subscriptions/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        session_token: sessionToken,
-        account_type: body?.account_type,
-        exchange: body?.exchange,
-        model: body?.model,
-        trade_type: body?.trade_type,
-        dca_mode: body?.dca_mode,
-        strategy_name: body?.strategy_name,
-        stake_amount: body?.stake_amount,
-        max_open_order: Number(body?.max_open_order ?? 15),
-        capital_usdt: Number(body?.capital_usdt ?? 0),
-        billing_cycle_days: Number(body?.billing_cycle_days ?? 30),
-        setup_charge_usd: Number(body?.setup_charge_usd ?? 0),
-        monthly_server_fee_usd: Number(body?.monthly_server_fee_usd ?? 10),
-        payment_status: "paid",
-      }),
-    });
 
-    const raw = await res.text();
-    let payload: Record<string, unknown>;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 540000); // 540 seconds
+
     try {
-      payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-    } catch {
-      payload = {
-        error: raw || "Backend returned a non-JSON response",
-      };
-    }
+      const res = await fetchBackend("/subscriptions/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: userEmail,
+          session_token: sessionToken,
+          account_type: body?.account_type,
+          exchange: body?.exchange,
+          model: body?.model,
+          trade_type: body?.trade_type,
+          dca_mode: body?.dca_mode,
+          strategy_name: body?.strategy_name,
+          stake_amount: body?.stake_amount,
+          max_open_order: Number(body?.max_open_order ?? 15),
+          capital_usdt: Number(body?.capital_usdt ?? 0),
+          billing_cycle_days: Number(body?.billing_cycle_days ?? 30),
+          setup_charge_usd: Number(body?.setup_charge_usd ?? 0),
+          monthly_server_fee_usd: Number(body?.monthly_server_fee_usd ?? 10),
+          payment_status: "paid",
+        }),
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      const detail = String(payload.detail ?? payload.error ?? payload.message ?? "Payment completion failed");
-      return NextResponse.json({ error: detail, detail }, { status: res.status });
-    }
+      clearTimeout(timeoutId);
 
-    return NextResponse.json(payload, { status: res.status });
+      const raw = await res.text();
+      let payload: Record<string, unknown>;
+      try {
+        payload = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      } catch {
+        payload = {
+          error: raw || "Backend returned a non-JSON response",
+        };
+      }
+
+      if (!res.ok) {
+        const detail = String(payload.detail ?? payload.error ?? payload.message ?? "Payment completion failed");
+        return NextResponse.json({ error: detail, detail }, { status: res.status });
+      }
+
+      return NextResponse.json(payload, { status: res.status });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const message = err instanceof Error ? err.message : "Failed to complete purchase";
+      if (message.includes("abort")) {
+        return NextResponse.json({ error: "Request timeout – bot provisioning is still in progress" }, { status: 504 });
+      }
+      throw err;
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to complete purchase";
     return NextResponse.json({ error: message }, { status: 500 });

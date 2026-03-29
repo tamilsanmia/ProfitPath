@@ -59,6 +59,31 @@ Freqtrade variables:
 - `BACKEND_FREQTRADE_BOT_IDS`
 - `BACKEND_FREQTRADE_BOT_NAMES`
 
+## Database Backup & Restore
+
+Backups run automatically every day at **2:00 AM UTC** and are stored in `backups/`.
+Each backup is a gzipped SQL dump kept for **30 days**.
+
+### Manual backup
+
+```bash
+bash /root/BotPrimeX/backend/backup.sh
+```
+
+### Restore a backup
+
+```bash
+gunzip -c backups/botprimex_YYYY-MM-DD_HH-MM-SS.sql.gz | docker exec -i botprimex-postgres psql -U postgres botprimex
+```
+
+### View backup logs
+
+```bash
+cat backups/backup.log
+```
+
+---
+
 ## Key Endpoints
 
 Health:

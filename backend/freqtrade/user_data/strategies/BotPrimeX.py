@@ -22,6 +22,7 @@ import pandas as pd
 warnings.simplefilter(action="ignore", category=pd.errors.PerformanceWarning)
 
 class BotPrimeX(IStrategy):
+    max_dca_multiplier = 1
     # Base strategy timeframes
     use_custom_stoploss = True
     timeframe = "5m"
@@ -36,10 +37,9 @@ class BotPrimeX(IStrategy):
     # Core trade behavior
     exit_profit_only = True
     trailing_stop = False
-    position_adjustment_enable = True
+    position_adjustment_enable = False
     ignore_roi_if_entry_signal = True
     max_entry_position_adjustment = 2
-    max_dca_multiplier = 1
     max_dca_orders_open = 2
 
     # Risk settings
@@ -51,29 +51,39 @@ class BotPrimeX(IStrategy):
     initial_entry_stake_ratio = 0.5
     dca_entry_stake_ratio = 0.5
 
-    # Shift signal lookback (number of candles to look back for prior extrema)
+    # Shift signal lookback 
     shift_lookback = 5
+
+    # 5m RSI thresholds for higher timeframe entry checks
+    entry_5m_rsi_long_15m = 30
+    entry_5m_rsi_short_15m = 70
+    entry_5m_rsi_long_30m = 40
+    entry_5m_rsi_short_30m = 60
+    entry_5m_rsi_long_1h = 40
+    entry_5m_rsi_short_1h = 60
+    entry_5m_rsi_long_4h = 40
+    entry_5m_rsi_short_4h = 60
 
     # ── DCA Settings ──────────────────────────────────────────────────────
     # DCA 1: profit window for 1st DCA re-entry (ratio, e.g. -0.15 = -15%)
-    dca_reentry_min_profit = -0.15        # shallowest drawdown to allow DCA1
-    dca_reentry_max_drawdown = -0.5       # deepest drawdown to allow DCA1
+    dca_reentry_min_profit = -0.15
+    dca_reentry_max_drawdown = -0.5
     # DCA 2: profit window for 2nd DCA re-entry
-    dca2_reentry_min_profit = -0.30       # shallowest drawdown to allow DCA2
-    dca2_reentry_max_drawdown = -0.5      # deepest drawdown to allow DCA2
+    dca2_reentry_min_profit = -0.3
+    dca2_reentry_max_drawdown = -0.5
     # Volatility guard: block DCA when 24h-change spikes within recent candles
     dca_sudden_chg_guard_enabled = True
-    dca_sudden_chg_threshold = 5.0        # min spread (pp) to block DCA
-    dca_sudden_chg_lookback = 10          # number of candles to check
+    dca_sudden_chg_threshold = 5
+    dca_sudden_chg_lookback = 10
 
     # ── 24h Change Filter (global) ────────────────────────────────────────
-    use_chg_filter = True                 # master switch for entry chg filter
-    use_chg_exit_buffer = True            # master switch for exit buffer
+    use_chg_filter = True
+    use_chg_exit_buffer = True
 
     # ── Telegram Alerts ───────────────────────────────────────────────────
     telegram_chg_alert_enabled = True
-    telegram_chg_min = -5.0
-    telegram_chg_max = 5.0
+    telegram_chg_min = -5
+    telegram_chg_max = 5
     telegram_chg_alert_state: Dict[str, Dict[str, Any]] = {}
 
     # ══════════════════════════════════════════════════════════════════════
@@ -90,65 +100,75 @@ class BotPrimeX(IStrategy):
     entry_5m_shift_long_enabled = True
     entry_5m_short_enabled = True
     entry_5m_shift_short_enabled = True
+    entry_5m_rsi_long = 30
+    entry_5m_rsi_short = 70
     chg_5m_enabled = True
-    chg_5m_min = -10.0
-    chg_5m_max = 10.0
-    dca_chg_5m_min = -10.0
-    dca_chg_5m_max = 10.0
+    chg_5m_min = -10
+    chg_5m_max = 10
+    dca_chg_5m_min = -10
+    dca_chg_5m_max = 10
     chg_5m_exit_buffer_enabled = True
-    chg_5m_exit_buffer = 2.0
+    chg_5m_exit_buffer = 2
 
     # ── 15m ───────────────────────────────────────────────────────────────
     entry_15m_long_enabled = False
     entry_15m_shift_long_enabled = False
     entry_15m_short_enabled = False
     entry_15m_shift_short_enabled = False
+    entry_15m_rsi_long = 30
+    entry_15m_rsi_short = 70
     chg_15m_enabled = True
-    chg_15m_min = -10.0
-    chg_15m_max = 10.0
-    dca_chg_15m_min = -10.0
-    dca_chg_15m_max = 10.0
+    chg_15m_min = -10
+    chg_15m_max = 10
+    dca_chg_15m_min = -10
+    dca_chg_15m_max = 10
     chg_15m_exit_buffer_enabled = True
-    chg_15m_exit_buffer = 2.0
+    chg_15m_exit_buffer = 2
 
     # ── 30m ───────────────────────────────────────────────────────────────
     entry_30m_long_enabled = False
     entry_30m_shift_long_enabled = False
     entry_30m_short_enabled = False
     entry_30m_shift_short_enabled = False
+    entry_30m_rsi_long = 30
+    entry_30m_rsi_short = 70
     chg_30m_enabled = True
-    chg_30m_min = -10.0
-    chg_30m_max = 10.0
-    dca_chg_30m_min = -10.0
-    dca_chg_30m_max = 10.0
+    chg_30m_min = -10
+    chg_30m_max = 10
+    dca_chg_30m_min = -10
+    dca_chg_30m_max = 10
     chg_30m_exit_buffer_enabled = True
-    chg_30m_exit_buffer = 2.0
+    chg_30m_exit_buffer = 2
 
     # ── 1h ────────────────────────────────────────────────────────────────
     entry_1h_long_enabled = False
     entry_1h_shift_long_enabled = False
     entry_1h_short_enabled = False
     entry_1h_shift_short_enabled = False
+    entry_1h_rsi_long = 30
+    entry_1h_rsi_short = 70
     chg_1h_enabled = True
-    chg_1h_min = -10.0
-    chg_1h_max = 10.0
-    dca_chg_1h_min = -10.0
-    dca_chg_1h_max = 10.0
+    chg_1h_min = -10
+    chg_1h_max = 10
+    dca_chg_1h_min = -10
+    dca_chg_1h_max = 10
     chg_1h_exit_buffer_enabled = True
-    chg_1h_exit_buffer = 2.0
+    chg_1h_exit_buffer = 2
 
     # ── 4h ────────────────────────────────────────────────────────────────
     entry_4h_long_enabled = False
     entry_4h_shift_long_enabled = False
     entry_4h_short_enabled = False
     entry_4h_shift_short_enabled = False
+    entry_4h_rsi_long = 30
+    entry_4h_rsi_short = 70
     chg_4h_enabled = True
-    chg_4h_min = -10.0
-    chg_4h_max = 10.0
-    dca_chg_4h_min = -10.0
-    dca_chg_4h_max = 10.0
+    chg_4h_min = -10
+    chg_4h_max = 10
+    dca_chg_4h_min = -10
+    dca_chg_4h_max = 10
     chg_4h_exit_buffer_enabled = True
-    chg_4h_exit_buffer = 2.0
+    chg_4h_exit_buffer = 2
 
     # Custom Functions
     increment = 1.001
@@ -373,7 +393,7 @@ class BotPrimeX(IStrategy):
                 "5M - Short": self.entry_5m_short_enabled and (
                     last_candle.get("maxima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_5m_min, self.dca_chg_5m_max, self.chg_5m_enabled)
                 ),
                 "5M - Shift Short": self.entry_5m_shift_short_enabled and (
@@ -382,17 +402,17 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_5m_min, self.dca_chg_5m_max, self.chg_5m_enabled)
                 ),
                 "15M - Short": self.entry_15m_short_enabled and (
                     last_candle.get("maxima_check_15m", 1) == 0
                     and last_candle.get("volume_15m", 0) > 0
-                    and last_candle.get("rsi_15m", 0) > 70
+                    and last_candle.get("rsi_15m", 0) > self.entry_15m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_15m_min, self.dca_chg_15m_max, self.chg_15m_enabled)
                     and last_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_15m
                 ),
                 "15M - Shift Short": self.entry_15m_shift_short_enabled and (
                     last_candle.get("DI_catch_15m", 0) == 0
@@ -400,20 +420,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume_15m", 0) > 0
-                    and last_candle.get("rsi_15m", 0) > 70
+                    and last_candle.get("rsi_15m", 0) > self.entry_15m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_15m_min, self.dca_chg_15m_max, self.chg_15m_enabled)
                     and last_candle.get("maxima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_15m
                 ),
                 "30M - Short": self.entry_30m_short_enabled and (
                     last_candle.get("maxima_check_30m", 1) == 0
                     and last_candle.get("volume_30m", 0) > 0
-                    and last_candle.get("rsi_30m", 0) > 70
+                    and last_candle.get("rsi_30m", 0) > self.entry_30m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_30m_min, self.dca_chg_30m_max, self.chg_30m_enabled)
                     and last_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_30m
                 ),
                 "30M - Shift Short": self.entry_30m_shift_short_enabled and (
                     last_candle.get("DI_catch_30m", 0) == 0
@@ -421,20 +441,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume_30m", 0) > 0
-                    and last_candle.get("rsi_30m", 0) > 70
+                    and last_candle.get("rsi_30m", 0) > self.entry_30m_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_30m_min, self.dca_chg_30m_max, self.chg_30m_enabled)
                     and last_candle.get("maxima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_30m
                 ),
                 "1H - Short": self.entry_1h_short_enabled and (
                     last_candle.get("maxima_check_1h", 1) == 0
                     and last_candle.get("volume_1h", 0) > 0
-                    and last_candle.get("rsi_1h", 0) > 70
+                    and last_candle.get("rsi_1h", 0) > self.entry_1h_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_1h_min, self.dca_chg_1h_max, self.chg_1h_enabled)
                     and last_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_1h
                 ),
                 "1H - Shift Short": self.entry_1h_shift_short_enabled and (
                     last_candle.get("DI_catch_1h", 0) == 0
@@ -442,20 +462,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume_1h", 0) > 0
-                    and last_candle.get("rsi_1h", 0) > 70
+                    and last_candle.get("rsi_1h", 0) > self.entry_1h_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_1h_min, self.dca_chg_1h_max, self.chg_1h_enabled)
                     and last_candle.get("maxima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_1h
                 ),
                 "4H - Short": self.entry_4h_short_enabled and (
                     last_candle.get("maxima_check_4h", 1) == 0
                     and last_candle.get("volume_4h", 0) > 0
-                    and last_candle.get("rsi_4h", 0) > 70
+                    and last_candle.get("rsi_4h", 0) > self.entry_4h_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_4h_min, self.dca_chg_4h_max, self.chg_4h_enabled)
                     and last_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_4h
                 ),
                 "4H - Shift Short": self.entry_4h_shift_short_enabled and (
                     last_candle.get("DI_catch_4h", 0) == 0
@@ -463,11 +483,11 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("maxima_check", 0) == 1
                     and last_candle.get("volume_4h", 0) > 0
-                    and last_candle.get("rsi_4h", 0) > 70
+                    and last_candle.get("rsi_4h", 0) > self.entry_4h_rsi_short
                     and chg_ok("chg_pct", self.dca_chg_4h_min, self.dca_chg_4h_max, self.chg_4h_enabled)
                     and last_candle.get("maxima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 0) > 70
+                    and last_candle.get("rsi", 0) > self.entry_5m_rsi_short_4h
                 ),
             }
         else:
@@ -475,7 +495,7 @@ class BotPrimeX(IStrategy):
                 "5M - Long": self.entry_5m_long_enabled and (
                     last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_5m_min, self.dca_chg_5m_max, self.chg_5m_enabled)
                 ),
                 "5M - Shift Long": self.entry_5m_shift_long_enabled and (
@@ -484,17 +504,17 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("minima_check", 0) == 1
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_5m_min, self.dca_chg_5m_max, self.chg_5m_enabled)
                 ),
                 "15M - Long": self.entry_15m_long_enabled and (
                     last_candle.get("minima_check_15m", 1) == 0
                     and last_candle.get("volume_15m", 0) > 0
-                    and last_candle.get("rsi_15m", 100) < 30
+                    and last_candle.get("rsi_15m", 100) < self.entry_15m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_15m_min, self.dca_chg_15m_max, self.chg_15m_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_15m
                 ),
                 "15M - Shift Long": self.entry_15m_shift_long_enabled and (
                     last_candle.get("DI_catch_15m", 0) == 1
@@ -502,20 +522,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("minima_check", 0) == 1
                     and last_candle.get("volume_15m", 0) > 0
-                    and last_candle.get("rsi_15m", 100) < 30
+                    and last_candle.get("rsi_15m", 100) < self.entry_15m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_15m_min, self.dca_chg_15m_max, self.chg_15m_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_15m
                 ),
                 "30M - Long": self.entry_30m_long_enabled and (
                     last_candle.get("minima_check_30m", 1) == 0
                     and last_candle.get("volume_30m", 0) > 0
-                    and last_candle.get("rsi_30m", 100) < 30
+                    and last_candle.get("rsi_30m", 100) < self.entry_30m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_30m_min, self.dca_chg_30m_max, self.chg_30m_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_30m
                 ),
                 "30M - Shift Long": self.entry_30m_shift_long_enabled and (
                     last_candle.get("DI_catch_30m", 0) == 1
@@ -523,20 +543,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("minima_check", 0) == 1
                     and last_candle.get("volume_30m", 0) > 0
-                    and last_candle.get("rsi_30m", 100) < 30
+                    and last_candle.get("rsi_30m", 100) < self.entry_30m_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_30m_min, self.dca_chg_30m_max, self.chg_30m_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_30m
                 ),
                 "1H - Long": self.entry_1h_long_enabled and (
                     last_candle.get("minima_check_1h", 1) == 0
                     and last_candle.get("volume_1h", 0) > 0
-                    and last_candle.get("rsi_1h", 100) < 30
+                    and last_candle.get("rsi_1h", 100) < self.entry_1h_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_1h_min, self.dca_chg_1h_max, self.chg_1h_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_1h
                 ),
                 "1H - Shift Long": self.entry_1h_shift_long_enabled and (
                     last_candle.get("DI_catch_1h", 0) == 1
@@ -544,20 +564,20 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("minima_check", 0) == 1
                     and last_candle.get("volume_1h", 0) > 0
-                    and last_candle.get("rsi_1h", 100) < 30
+                    and last_candle.get("rsi_1h", 100) < self.entry_1h_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_1h_min, self.dca_chg_1h_max, self.chg_1h_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_1h
                 ),
                 "4H - Long": self.entry_4h_long_enabled and (
                     last_candle.get("minima_check_4h", 1) == 0
                     and last_candle.get("volume_4h", 0) > 0
-                    and last_candle.get("rsi_4h", 100) < 30
+                    and last_candle.get("rsi_4h", 100) < self.entry_4h_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_4h_min, self.dca_chg_4h_max, self.chg_4h_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_4h
                 ),
                 "4H - Shift Long": self.entry_4h_shift_long_enabled and (
                     last_candle.get("DI_catch_4h", 0) == 1
@@ -565,11 +585,11 @@ class BotPrimeX(IStrategy):
                     and shifted_candle is not None
                     and shifted_candle.get("minima_check", 0) == 1
                     and last_candle.get("volume_4h", 0) > 0
-                    and last_candle.get("rsi_4h", 100) < 30
+                    and last_candle.get("rsi_4h", 100) < self.entry_4h_rsi_long
                     and chg_ok("chg_pct", self.dca_chg_4h_min, self.dca_chg_4h_max, self.chg_4h_enabled)
                     and last_candle.get("minima_check", 1) == 0
                     and last_candle.get("volume", 0) > 0
-                    and last_candle.get("rsi", 100) < 30
+                    and last_candle.get("rsi", 100) < self.entry_5m_rsi_long_4h
                 ),
             }
 
@@ -585,9 +605,12 @@ class BotPrimeX(IStrategy):
                 return None
 
         try:
-            # "In-between price" DCA: stake only the unrealised loss amount.
-            stake_amount = filled_entries[0].cost * abs(current_profit)
-
+            # Reuse the initial filled-entry size, with optional geometric scaling when configured.
+            stake_amount = filled_entries[0].cost
+            scale_setting = getattr(self, "safety_order_volume_scale", 1.0)
+            dca_scale = float(getattr(scale_setting, "value", scale_setting)) ** (count_of_entries - 1)
+            stake_amount = stake_amount * dca_scale
+            
             if min_stake is not None and stake_amount < min_stake:
                 return None
 
@@ -957,7 +980,7 @@ class BotPrimeX(IStrategy):
                 self.entry_5m_long_enabled
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long)
                 & chg_5m_ok
             ),
             ["enter_long", "enter_tag"],
@@ -970,7 +993,7 @@ class BotPrimeX(IStrategy):
                 & (df["minima_check"] == 0)
                 & (df["minima_check"].shift(self.shift_lookback) == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long)
                 & chg_5m_ok
             ),
             ["enter_long", "enter_tag"],
@@ -983,11 +1006,11 @@ class BotPrimeX(IStrategy):
                 self.entry_15m_long_enabled
                 & (df["minima_check_15m"] == 0)
                 & (df["volume_15m"] > 0)
-                & (df["rsi_15m"] < 30)
+                & (df["rsi_15m"] < self.entry_15m_rsi_long)
                 & chg_15m_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_15m)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "15M - Long")
@@ -999,11 +1022,11 @@ class BotPrimeX(IStrategy):
                 & (df["minima_check_15m"] == 0)
                 & (df["minima_check"].shift(self.shift_lookback) == 1)
                 & (df["volume_15m"] > 0)
-                & (df["rsi_15m"] < 30)
+                & (df["rsi_15m"] < self.entry_15m_rsi_long)
                 & chg_15m_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_15m)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "15M - Shift Long")
@@ -1015,11 +1038,11 @@ class BotPrimeX(IStrategy):
                 self.entry_30m_long_enabled
                 &(df["minima_check_30m"] == 0)
                 & (df["volume_30m"] > 0)
-                & (df["rsi_30m"] < 30)
+                & (df["rsi_30m"] < self.entry_30m_rsi_long)
                 & chg_30m_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_30m)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "30M - Long")
@@ -1031,11 +1054,11 @@ class BotPrimeX(IStrategy):
                 & (df["minima_check_30m"] == 0)
                 & (df["minima_check"].shift(self.shift_lookback) == 1) 
                 & (df["volume_30m"] > 0)
-                & (df["rsi_30m"] < 30)
+                & (df["rsi_30m"] < self.entry_30m_rsi_long)
                 & chg_30m_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_30m)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "30M - Shift Long")        
@@ -1047,11 +1070,11 @@ class BotPrimeX(IStrategy):
                 self.entry_1h_long_enabled
                 &(df["minima_check_1h"] == 0)
                 & (df["volume_1h"] > 0)
-                & (df["rsi_1h"] < 30)
+                & (df["rsi_1h"] < self.entry_1h_rsi_long)
                 & chg_1h_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_1h)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "1H - Long")
@@ -1063,11 +1086,11 @@ class BotPrimeX(IStrategy):
                 & (df["minima_check_1h"] == 0)
                 & (df["minima_check"].shift(self.shift_lookback) == 1) 
                 & (df["volume_1h"] > 0)
-                & (df["rsi_1h"] < 30)
+                & (df["rsi_1h"] < self.entry_1h_rsi_long)
                 & chg_1h_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_1h)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "1H - Shift Long")
@@ -1079,11 +1102,11 @@ class BotPrimeX(IStrategy):
                 self.entry_4h_long_enabled
                 &(df["minima_check_4h"] == 0)
                 & (df["volume_4h"] > 0)
-                & (df["rsi_4h"] < 30)
+                & (df["rsi_4h"] < self.entry_4h_rsi_long)
                 & chg_4h_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_4h)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "4H - Long")
@@ -1095,11 +1118,11 @@ class BotPrimeX(IStrategy):
                 & (df["minima_check_4h"] == 0)
                 & (df["minima_check"].shift(self.shift_lookback) == 1) 
                 & (df["volume_4h"] > 0)
-                & (df["rsi_4h"] < 30)
+                & (df["rsi_4h"] < self.entry_4h_rsi_long)
                 & chg_4h_ok
                 & (df["minima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] < 30)
+                & (df["rsi"] < self.entry_5m_rsi_long_4h)
             ),
             ["enter_long", "enter_tag"],
         ] = (1, "4H - Shift Long")
@@ -1111,7 +1134,7 @@ class BotPrimeX(IStrategy):
                 self.entry_5m_short_enabled
                 & (df["maxima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short)
                 & chg_5m_ok
             ),
             ["enter_short", "enter_tag"],
@@ -1124,7 +1147,7 @@ class BotPrimeX(IStrategy):
                 & (df["maxima_check"] == 0)
                 & (df["maxima_check"].shift(self.shift_lookback) == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short)
                 & chg_5m_ok
             ),
             ["enter_short", "enter_tag"],
@@ -1137,11 +1160,11 @@ class BotPrimeX(IStrategy):
                 self.entry_15m_short_enabled
                 & (df["maxima_check_15m"] == 0)
                 & (df["volume_15m"] > 0)
-                & (df["rsi_15m"] > 70)
+                & (df["rsi_15m"] > self.entry_15m_rsi_short)
                 & chg_15m_ok
                 & (df["maxima_check"] == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_15m)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "15M - Short")
@@ -1153,11 +1176,11 @@ class BotPrimeX(IStrategy):
                 & (df["maxima_check_15m"] == 0)
                 & (df["maxima_check"].shift(self.shift_lookback) == 1)
                 & (df["volume_15m"] > 0)
-                & (df["rsi_15m"] > 70)
+                & (df["rsi_15m"] > self.entry_15m_rsi_short)
                 & chg_15m_ok
                 & (df["maxima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_15m)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "15M - Shift Short")
@@ -1169,11 +1192,11 @@ class BotPrimeX(IStrategy):
                 self.entry_30m_short_enabled
                 &(df["maxima_check_30m"] == 0)
                 & (df["volume_30m"] > 0)
-                & (df["rsi_30m"] > 70)
+                & (df["rsi_30m"] > self.entry_30m_rsi_short)
                 & chg_30m_ok
                 & (df["maxima_check"] == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_30m)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "30M - Short")
@@ -1185,11 +1208,11 @@ class BotPrimeX(IStrategy):
                 & (df["maxima_check_30m"] == 0)
                 & (df["maxima_check"].shift(self.shift_lookback) == 1) 
                 & (df["volume_30m"] > 0)
-                & (df["rsi_30m"] > 70)
+                & (df["rsi_30m"] > self.entry_30m_rsi_short)
                 & chg_30m_ok
                 & (df["maxima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_30m)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "30M - Shift Short")
@@ -1202,11 +1225,11 @@ class BotPrimeX(IStrategy):
                 &
                 (df["maxima_check_1h"] == 0)
                 & (df["volume_1h"] > 0)
-                & (df["rsi_1h"] > 70)
+                & (df["rsi_1h"] > self.entry_1h_rsi_short)
                 & chg_1h_ok
                 & (df["maxima_check"] == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_1h)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "1H - Short")
@@ -1218,11 +1241,11 @@ class BotPrimeX(IStrategy):
                 & (df["maxima_check_1h"] == 0)
                 & (df["maxima_check"].shift(self.shift_lookback) == 1) 
                 & (df["volume_1h"] > 0)
-                & (df["rsi_1h"] > 70)
+                & (df["rsi_1h"] > self.entry_1h_rsi_short)
                 & chg_1h_ok
                 & (df["maxima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_1h)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "1H - Shift Short")
@@ -1234,11 +1257,11 @@ class BotPrimeX(IStrategy):
                 self.entry_4h_short_enabled
                 &(df["maxima_check_4h"] == 0)
                 & (df["volume_4h"] > 0)
-                & (df["rsi_4h"] > 70)
+                & (df["rsi_4h"] > self.entry_4h_rsi_short)
                 & chg_4h_ok
                 & (df["maxima_check"] == 1)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_4h)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "4H - Short")
@@ -1250,11 +1273,11 @@ class BotPrimeX(IStrategy):
                 &(df["maxima_check_4h"] == 0)
                 & (df["maxima_check"].shift(self.shift_lookback) == 1)
                 & (df["volume_4h"] > 0)
-                & (df["rsi_4h"] > 70)
+                & (df["rsi_4h"] > self.entry_4h_rsi_short)
                 & chg_4h_ok
                 & (df["maxima_check"] == 0)
                 & (df["volume"] > 0)
-                & (df["rsi"] > 70)
+                & (df["rsi"] > self.entry_5m_rsi_short_4h)
             ),
             ["enter_short", "enter_tag"],
         ] = (1, "4H - Shift Short")

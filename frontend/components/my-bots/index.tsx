@@ -698,41 +698,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     deploy_enabled?: boolean
     deploy_unavailable_reason?: string
     last_error?: string
-    strategy_settings?: {
-      strategy_name?: string
-      trade_type?: string
-      dca_mode?: string
-      dca_enabled?: boolean
-      stake_amount?: number
-      max_open_order?: number
-      stoploss_pct?: number
-      dca_stoploss_pct?: number
-      entry_30m_enabled?: boolean
-      entry_1h_enabled?: boolean
-      entry_4h_enabled?: boolean
-      use_chg_filter?: boolean
-      chg_30m_enabled?: boolean
-      chg_1h_enabled?: boolean
-      chg_4h_enabled?: boolean
-      chg_30m_min?: number
-      chg_30m_max?: number
-      chg_1h_min?: number
-      chg_1h_max?: number
-      chg_4h_min?: number
-      chg_4h_max?: number
-      dca_chg_30m_min?: number
-      dca_chg_30m_max?: number
-      dca_chg_1h_min?: number
-      dca_chg_1h_max?: number
-      dca_chg_4h_min?: number
-      dca_chg_4h_max?: number
-      chg_30m_exit_buffer?: number
-      chg_1h_exit_buffer?: number
-      chg_4h_exit_buffer?: number
-      dca_reentry_min_profit?: number
-      dca_reentry_max_drawdown?: number
-      leverage?: number
-    }
+    strategy_settings?: Record<string, unknown>
     history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
   } | null>(null)
   const [typeFilter, setTypeFilter] = useState(FILTER_ALL)
@@ -764,31 +730,105 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     maxOpenOrder: 15,
     stoplossPct: 99,
     dcaStoplossPct: 50,
-    entry30mEnabled: false,
-    entry1hEnabled: false,
-    entry4hEnabled: false,
+    leverage: 5,
+    // DCA core
+    maxDcaMultiplier: 1,
+    maxDcaOrdersOpen: 2,
+    initialEntryStakeRatio: 0.5,
+    dcaEntryStakeRatio: 0.5,
+    shiftLookback: 5,
+    // Per-TF entry toggles
+    entry5mLongEnabled: true,
+    entry5mShiftLongEnabled: true,
+    entry5mShortEnabled: true,
+    entry5mShiftShortEnabled: true,
+    entry15mLongEnabled: false,
+    entry15mShiftLongEnabled: false,
+    entry15mShortEnabled: false,
+    entry15mShiftShortEnabled: false,
+    entry30mLongEnabled: false,
+    entry30mShiftLongEnabled: false,
+    entry30mShortEnabled: false,
+    entry30mShiftShortEnabled: false,
+    entry1hLongEnabled: false,
+    entry1hShiftLongEnabled: false,
+    entry1hShortEnabled: false,
+    entry1hShiftShortEnabled: false,
+    entry4hLongEnabled: false,
+    entry4hShiftLongEnabled: false,
+    entry4hShortEnabled: false,
+    entry4hShiftShortEnabled: false,
+    // Per-TF RSI
+    entry5mRsiLong: 30,
+    entry5mRsiShort: 70,
+    entry15mRsiLong: 30,
+    entry15mRsiShort: 70,
+    entry30mRsiLong: 30,
+    entry30mRsiShort: 70,
+    entry1hRsiLong: 30,
+    entry1hRsiShort: 70,
+    entry4hRsiLong: 30,
+    entry4hRsiShort: 70,
+    // Cross-TF RSI
+    entry5mRsiLong15m: 30,
+    entry5mRsiShort15m: 70,
+    entry5mRsiLong30m: 40,
+    entry5mRsiShort30m: 60,
+    entry5mRsiLong1h: 40,
+    entry5mRsiShort1h: 60,
+    entry5mRsiLong4h: 40,
+    entry5mRsiShort4h: 60,
+    // CHG filter
     useChgFilter: true,
+    useChgExitBuffer: true,
+    chg5mEnabled: true,
+    chg5mMin: -10,
+    chg5mMax: 10,
+    dcaChg5mMin: -10,
+    dcaChg5mMax: 10,
+    chg5mExitBufferEnabled: true,
+    chg5mExitBuffer: 2,
+    chg15mEnabled: true,
+    chg15mMin: -10,
+    chg15mMax: 10,
+    dcaChg15mMin: -10,
+    dcaChg15mMax: 10,
+    chg15mExitBufferEnabled: true,
+    chg15mExitBuffer: 2,
     chg30mEnabled: true,
-    chg1hEnabled: true,
-    chg4hEnabled: true,
     chg30mMin: -10,
     chg30mMax: 10,
-    chg1hMin: -10,
-    chg1hMax: 10,
-    chg4hMin: -10,
-    chg4hMax: 10,
     dcaChg30mMin: -10,
     dcaChg30mMax: 10,
+    chg30mExitBufferEnabled: true,
+    chg30mExitBuffer: 2,
+    chg1hEnabled: true,
+    chg1hMin: -10,
+    chg1hMax: 10,
     dcaChg1hMin: -10,
     dcaChg1hMax: 10,
+    chg1hExitBufferEnabled: true,
+    chg1hExitBuffer: 2,
+    chg4hEnabled: true,
+    chg4hMin: -10,
+    chg4hMax: 10,
     dcaChg4hMin: -10,
     dcaChg4hMax: 10,
-    chg30mExitBuffer: 2,
-    chg1hExitBuffer: 2,
+    chg4hExitBufferEnabled: true,
     chg4hExitBuffer: 2,
-    dcaReentryMinProfit: -5,
-    dcaReentryMaxDrawdown: -30,
-    leverage: 5,
+    // DCA re-entry
+    dcaReentryMinProfit: -15,
+    dcaReentryMaxDrawdown: -50,
+    dca2ReentryMinProfit: -30,
+    dca2ReentryMaxDrawdown: -50,
+    // Volatility guard
+    dcaSuddenChgGuardEnabled: true,
+    dcaSuddenChgThreshold: 5.0,
+    dcaSuddenChgLookback: 10,
+    // Telegram
+    telegramChgAlertEnabled: true,
+    telegramChgMin: -5,
+    telegramChgMax: 5,
   })
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
   const [archivedBots, setArchivedBots] = useState<Record<string, boolean>>({})
@@ -823,41 +863,7 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
           deploy_enabled?: boolean
           deploy_unavailable_reason?: string
           last_error?: string
-          strategy_settings?: {
-            strategy_name?: string
-            trade_type?: string
-            dca_mode?: string
-            dca_enabled?: boolean
-            stake_amount?: number
-            max_open_order?: number
-            stoploss_pct?: number
-            dca_stoploss_pct?: number
-            entry_30m_enabled?: boolean
-            entry_1h_enabled?: boolean
-            entry_4h_enabled?: boolean
-            use_chg_filter?: boolean
-            chg_30m_enabled?: boolean
-            chg_1h_enabled?: boolean
-            chg_4h_enabled?: boolean
-            chg_30m_min?: number
-            chg_30m_max?: number
-            chg_1h_min?: number
-            chg_1h_max?: number
-            chg_4h_min?: number
-            chg_4h_max?: number
-            dca_chg_30m_min?: number
-            dca_chg_30m_max?: number
-            dca_chg_1h_min?: number
-            dca_chg_1h_max?: number
-            dca_chg_4h_min?: number
-            dca_chg_4h_max?: number
-            chg_30m_exit_buffer?: number
-            chg_1h_exit_buffer?: number
-            chg_4h_exit_buffer?: number
-            dca_reentry_min_profit?: number
-            dca_reentry_max_drawdown?: number
-            leverage?: number
-          }
+          strategy_settings?: Record<string, unknown>
           history?: Array<{ step?: string; status?: string; message?: string; timestamp?: string }>
         }
       }
@@ -1077,6 +1083,19 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
     const dcaReentryMinRaw = Number(runtime?.dca_reentry_min_profit ?? -0.05)
     const dcaReentryMaxRaw = Number(runtime?.dca_reentry_max_drawdown ?? -0.3)
 
+    const _b = (key: string, def: boolean) => {
+      const v = runtime?.[key as keyof typeof runtime]
+      return typeof v === "boolean" ? v : def
+    }
+    const _n = (key: string, def: number) => {
+      const v = Number(runtime?.[key as keyof typeof runtime] ?? def)
+      return Number.isFinite(v) ? v : def
+    }
+    const _pct = (raw: number, def: number) => {
+      if (!Number.isFinite(raw)) return def
+      return Math.abs(raw) <= 1 ? raw * 100 : raw
+    }
+
     setSettingsForm({
       tradeType,
       dcaMode,
@@ -1084,31 +1103,105 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
       maxOpenOrder: Number.isFinite(maxOpenRaw) ? Math.max(1, Math.min(100, Math.trunc(maxOpenRaw))) : 15,
       stoplossPct: Number.isFinite(stoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(stoplossPctRaw))) : 99,
       dcaStoplossPct: Number.isFinite(dcaStoplossPctRaw) ? Math.max(1, Math.min(100, Math.abs(dcaStoplossPctRaw))) : 50,
-      entry30mEnabled: runtime?.entry_30m_enabled ?? false,
-      entry1hEnabled: runtime?.entry_1h_enabled ?? false,
-      entry4hEnabled: runtime?.entry_4h_enabled ?? false,
-      useChgFilter: runtime?.use_chg_filter ?? true,
-      chg30mEnabled: runtime?.chg_30m_enabled ?? true,
-      chg1hEnabled: runtime?.chg_1h_enabled ?? true,
-      chg4hEnabled: runtime?.chg_4h_enabled ?? true,
-      chg30mMin: Number(runtime?.chg_30m_min ?? -10),
-      chg30mMax: Number(runtime?.chg_30m_max ?? 10),
-      chg1hMin: Number(runtime?.chg_1h_min ?? -10),
-      chg1hMax: Number(runtime?.chg_1h_max ?? 10),
-      chg4hMin: Number(runtime?.chg_4h_min ?? -10),
-      chg4hMax: Number(runtime?.chg_4h_max ?? 10),
-      dcaChg30mMin: Number(runtime?.dca_chg_30m_min ?? -10),
-      dcaChg30mMax: Number(runtime?.dca_chg_30m_max ?? 10),
-      dcaChg1hMin: Number(runtime?.dca_chg_1h_min ?? -10),
-      dcaChg1hMax: Number(runtime?.dca_chg_1h_max ?? 10),
-      dcaChg4hMin: Number(runtime?.dca_chg_4h_min ?? -10),
-      dcaChg4hMax: Number(runtime?.dca_chg_4h_max ?? 10),
-      chg30mExitBuffer: Number(runtime?.chg_30m_exit_buffer ?? 2),
-      chg1hExitBuffer: Number(runtime?.chg_1h_exit_buffer ?? 2),
-      chg4hExitBuffer: Number(runtime?.chg_4h_exit_buffer ?? 2),
-      dcaReentryMinProfit: Number.isFinite(dcaReentryMinRaw) ? (Math.abs(dcaReentryMinRaw) <= 1 ? dcaReentryMinRaw * 100 : dcaReentryMinRaw) : -5,
-      dcaReentryMaxDrawdown: Number.isFinite(dcaReentryMaxRaw) ? (Math.abs(dcaReentryMaxRaw) <= 1 ? dcaReentryMaxRaw * 100 : dcaReentryMaxRaw) : -30,
       leverage: Number.isFinite(leverageRaw) ? Math.max(1, Math.min(125, leverageRaw)) : 5,
+      // DCA core
+      maxDcaMultiplier: _n("max_dca_multiplier", 1),
+      maxDcaOrdersOpen: _n("max_dca_orders_open", 2),
+      initialEntryStakeRatio: _n("initial_entry_stake_ratio", 0.5),
+      dcaEntryStakeRatio: _n("dca_entry_stake_ratio", 0.5),
+      shiftLookback: _n("shift_lookback", 5),
+      // Per-TF entry toggles
+      entry5mLongEnabled: _b("entry_5m_long_enabled", true),
+      entry5mShiftLongEnabled: _b("entry_5m_shift_long_enabled", true),
+      entry5mShortEnabled: _b("entry_5m_short_enabled", true),
+      entry5mShiftShortEnabled: _b("entry_5m_shift_short_enabled", true),
+      entry15mLongEnabled: _b("entry_15m_long_enabled", false),
+      entry15mShiftLongEnabled: _b("entry_15m_shift_long_enabled", false),
+      entry15mShortEnabled: _b("entry_15m_short_enabled", false),
+      entry15mShiftShortEnabled: _b("entry_15m_shift_short_enabled", false),
+      entry30mLongEnabled: _b("entry_30m_long_enabled", false),
+      entry30mShiftLongEnabled: _b("entry_30m_shift_long_enabled", false),
+      entry30mShortEnabled: _b("entry_30m_short_enabled", false),
+      entry30mShiftShortEnabled: _b("entry_30m_shift_short_enabled", false),
+      entry1hLongEnabled: _b("entry_1h_long_enabled", false),
+      entry1hShiftLongEnabled: _b("entry_1h_shift_long_enabled", false),
+      entry1hShortEnabled: _b("entry_1h_short_enabled", false),
+      entry1hShiftShortEnabled: _b("entry_1h_shift_short_enabled", false),
+      entry4hLongEnabled: _b("entry_4h_long_enabled", false),
+      entry4hShiftLongEnabled: _b("entry_4h_shift_long_enabled", false),
+      entry4hShortEnabled: _b("entry_4h_short_enabled", false),
+      entry4hShiftShortEnabled: _b("entry_4h_shift_short_enabled", false),
+      // Per-TF RSI
+      entry5mRsiLong: _n("entry_5m_rsi_long", 30),
+      entry5mRsiShort: _n("entry_5m_rsi_short", 70),
+      entry15mRsiLong: _n("entry_15m_rsi_long", 30),
+      entry15mRsiShort: _n("entry_15m_rsi_short", 70),
+      entry30mRsiLong: _n("entry_30m_rsi_long", 30),
+      entry30mRsiShort: _n("entry_30m_rsi_short", 70),
+      entry1hRsiLong: _n("entry_1h_rsi_long", 30),
+      entry1hRsiShort: _n("entry_1h_rsi_short", 70),
+      entry4hRsiLong: _n("entry_4h_rsi_long", 30),
+      entry4hRsiShort: _n("entry_4h_rsi_short", 70),
+      // Cross-TF RSI
+      entry5mRsiLong15m: _n("entry_5m_rsi_long_15m", 30),
+      entry5mRsiShort15m: _n("entry_5m_rsi_short_15m", 70),
+      entry5mRsiLong30m: _n("entry_5m_rsi_long_30m", 40),
+      entry5mRsiShort30m: _n("entry_5m_rsi_short_30m", 60),
+      entry5mRsiLong1h: _n("entry_5m_rsi_long_1h", 40),
+      entry5mRsiShort1h: _n("entry_5m_rsi_short_1h", 60),
+      entry5mRsiLong4h: _n("entry_5m_rsi_long_4h", 40),
+      entry5mRsiShort4h: _n("entry_5m_rsi_short_4h", 60),
+      // CHG filter
+      useChgFilter: _b("use_chg_filter", true),
+      useChgExitBuffer: _b("use_chg_exit_buffer", true),
+      chg5mEnabled: _b("chg_5m_enabled", true),
+      chg5mMin: _n("chg_5m_min", -10),
+      chg5mMax: _n("chg_5m_max", 10),
+      dcaChg5mMin: _n("dca_chg_5m_min", -10),
+      dcaChg5mMax: _n("dca_chg_5m_max", 10),
+      chg5mExitBufferEnabled: _b("chg_5m_exit_buffer_enabled", true),
+      chg5mExitBuffer: _n("chg_5m_exit_buffer", 2),
+      chg15mEnabled: _b("chg_15m_enabled", true),
+      chg15mMin: _n("chg_15m_min", -10),
+      chg15mMax: _n("chg_15m_max", 10),
+      dcaChg15mMin: _n("dca_chg_15m_min", -10),
+      dcaChg15mMax: _n("dca_chg_15m_max", 10),
+      chg15mExitBufferEnabled: _b("chg_15m_exit_buffer_enabled", true),
+      chg15mExitBuffer: _n("chg_15m_exit_buffer", 2),
+      chg30mEnabled: _b("chg_30m_enabled", true),
+      chg30mMin: _n("chg_30m_min", -10),
+      chg30mMax: _n("chg_30m_max", 10),
+      dcaChg30mMin: _n("dca_chg_30m_min", -10),
+      dcaChg30mMax: _n("dca_chg_30m_max", 10),
+      chg30mExitBufferEnabled: _b("chg_30m_exit_buffer_enabled", true),
+      chg30mExitBuffer: _n("chg_30m_exit_buffer", 2),
+      chg1hEnabled: _b("chg_1h_enabled", true),
+      chg1hMin: _n("chg_1h_min", -10),
+      chg1hMax: _n("chg_1h_max", 10),
+      dcaChg1hMin: _n("dca_chg_1h_min", -10),
+      dcaChg1hMax: _n("dca_chg_1h_max", 10),
+      chg1hExitBufferEnabled: _b("chg_1h_exit_buffer_enabled", true),
+      chg1hExitBuffer: _n("chg_1h_exit_buffer", 2),
+      chg4hEnabled: _b("chg_4h_enabled", true),
+      chg4hMin: _n("chg_4h_min", -10),
+      chg4hMax: _n("chg_4h_max", 10),
+      dcaChg4hMin: _n("dca_chg_4h_min", -10),
+      dcaChg4hMax: _n("dca_chg_4h_max", 10),
+      chg4hExitBufferEnabled: _b("chg_4h_exit_buffer_enabled", true),
+      chg4hExitBuffer: _n("chg_4h_exit_buffer", 2),
+      // DCA re-entry
+      dcaReentryMinProfit: _pct(dcaReentryMinRaw, -15),
+      dcaReentryMaxDrawdown: _pct(dcaReentryMaxRaw, -50),
+      dca2ReentryMinProfit: _pct(_n("dca2_reentry_min_profit", -0.30), -30),
+      dca2ReentryMaxDrawdown: _pct(_n("dca2_reentry_max_drawdown", -0.5), -50),
+      // Volatility guard
+      dcaSuddenChgGuardEnabled: _b("dca_sudden_chg_guard_enabled", true),
+      dcaSuddenChgThreshold: _n("dca_sudden_chg_threshold", 5),
+      dcaSuddenChgLookback: _n("dca_sudden_chg_lookback", 10),
+      // Telegram
+      telegramChgAlertEnabled: _b("telegram_chg_alert_enabled", true),
+      telegramChgMin: _n("telegram_chg_min", -5),
+      telegramChgMax: _n("telegram_chg_max", 5),
     })
   }, [setupState?.strategy_settings, stats?.config])
 
@@ -1887,31 +1980,105 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
         maxOpenOrder: settingsForm.maxOpenOrder,
         stoplossPct: settingsForm.stoplossPct,
         dcaStoplossPct: settingsForm.dcaStoplossPct,
-        entry30mEnabled: settingsForm.entry30mEnabled,
-        entry1hEnabled: settingsForm.entry1hEnabled,
-        entry4hEnabled: settingsForm.entry4hEnabled,
+        leverage: settingsForm.leverage,
+        // DCA core
+        maxDcaMultiplier: settingsForm.maxDcaMultiplier,
+        maxDcaOrdersOpen: settingsForm.maxDcaOrdersOpen,
+        initialEntryStakeRatio: settingsForm.initialEntryStakeRatio,
+        dcaEntryStakeRatio: settingsForm.dcaEntryStakeRatio,
+        shiftLookback: settingsForm.shiftLookback,
+        // Per-TF entry toggles
+        entry5mLongEnabled: settingsForm.entry5mLongEnabled,
+        entry5mShiftLongEnabled: settingsForm.entry5mShiftLongEnabled,
+        entry5mShortEnabled: settingsForm.entry5mShortEnabled,
+        entry5mShiftShortEnabled: settingsForm.entry5mShiftShortEnabled,
+        entry15mLongEnabled: settingsForm.entry15mLongEnabled,
+        entry15mShiftLongEnabled: settingsForm.entry15mShiftLongEnabled,
+        entry15mShortEnabled: settingsForm.entry15mShortEnabled,
+        entry15mShiftShortEnabled: settingsForm.entry15mShiftShortEnabled,
+        entry30mLongEnabled: settingsForm.entry30mLongEnabled,
+        entry30mShiftLongEnabled: settingsForm.entry30mShiftLongEnabled,
+        entry30mShortEnabled: settingsForm.entry30mShortEnabled,
+        entry30mShiftShortEnabled: settingsForm.entry30mShiftShortEnabled,
+        entry1hLongEnabled: settingsForm.entry1hLongEnabled,
+        entry1hShiftLongEnabled: settingsForm.entry1hShiftLongEnabled,
+        entry1hShortEnabled: settingsForm.entry1hShortEnabled,
+        entry1hShiftShortEnabled: settingsForm.entry1hShiftShortEnabled,
+        entry4hLongEnabled: settingsForm.entry4hLongEnabled,
+        entry4hShiftLongEnabled: settingsForm.entry4hShiftLongEnabled,
+        entry4hShortEnabled: settingsForm.entry4hShortEnabled,
+        entry4hShiftShortEnabled: settingsForm.entry4hShiftShortEnabled,
+        // Per-TF RSI
+        entry5mRsiLong: settingsForm.entry5mRsiLong,
+        entry5mRsiShort: settingsForm.entry5mRsiShort,
+        entry15mRsiLong: settingsForm.entry15mRsiLong,
+        entry15mRsiShort: settingsForm.entry15mRsiShort,
+        entry30mRsiLong: settingsForm.entry30mRsiLong,
+        entry30mRsiShort: settingsForm.entry30mRsiShort,
+        entry1hRsiLong: settingsForm.entry1hRsiLong,
+        entry1hRsiShort: settingsForm.entry1hRsiShort,
+        entry4hRsiLong: settingsForm.entry4hRsiLong,
+        entry4hRsiShort: settingsForm.entry4hRsiShort,
+        // Cross-TF RSI
+        entry5mRsiLong15m: settingsForm.entry5mRsiLong15m,
+        entry5mRsiShort15m: settingsForm.entry5mRsiShort15m,
+        entry5mRsiLong30m: settingsForm.entry5mRsiLong30m,
+        entry5mRsiShort30m: settingsForm.entry5mRsiShort30m,
+        entry5mRsiLong1h: settingsForm.entry5mRsiLong1h,
+        entry5mRsiShort1h: settingsForm.entry5mRsiShort1h,
+        entry5mRsiLong4h: settingsForm.entry5mRsiLong4h,
+        entry5mRsiShort4h: settingsForm.entry5mRsiShort4h,
+        // CHG filter
         useChgFilter: settingsForm.useChgFilter,
+        useChgExitBuffer: settingsForm.useChgExitBuffer,
+        chg5mEnabled: settingsForm.chg5mEnabled,
+        chg5mMin: settingsForm.chg5mMin,
+        chg5mMax: settingsForm.chg5mMax,
+        dcaChg5mMin: settingsForm.dcaChg5mMin,
+        dcaChg5mMax: settingsForm.dcaChg5mMax,
+        chg5mExitBufferEnabled: settingsForm.chg5mExitBufferEnabled,
+        chg5mExitBuffer: settingsForm.chg5mExitBuffer,
+        chg15mEnabled: settingsForm.chg15mEnabled,
+        chg15mMin: settingsForm.chg15mMin,
+        chg15mMax: settingsForm.chg15mMax,
+        dcaChg15mMin: settingsForm.dcaChg15mMin,
+        dcaChg15mMax: settingsForm.dcaChg15mMax,
+        chg15mExitBufferEnabled: settingsForm.chg15mExitBufferEnabled,
+        chg15mExitBuffer: settingsForm.chg15mExitBuffer,
         chg30mEnabled: settingsForm.chg30mEnabled,
-        chg1hEnabled: settingsForm.chg1hEnabled,
-        chg4hEnabled: settingsForm.chg4hEnabled,
         chg30mMin: settingsForm.chg30mMin,
         chg30mMax: settingsForm.chg30mMax,
-        chg1hMin: settingsForm.chg1hMin,
-        chg1hMax: settingsForm.chg1hMax,
-        chg4hMin: settingsForm.chg4hMin,
-        chg4hMax: settingsForm.chg4hMax,
         dcaChg30mMin: settingsForm.dcaChg30mMin,
         dcaChg30mMax: settingsForm.dcaChg30mMax,
+        chg30mExitBufferEnabled: settingsForm.chg30mExitBufferEnabled,
+        chg30mExitBuffer: settingsForm.chg30mExitBuffer,
+        chg1hEnabled: settingsForm.chg1hEnabled,
+        chg1hMin: settingsForm.chg1hMin,
+        chg1hMax: settingsForm.chg1hMax,
         dcaChg1hMin: settingsForm.dcaChg1hMin,
         dcaChg1hMax: settingsForm.dcaChg1hMax,
+        chg1hExitBufferEnabled: settingsForm.chg1hExitBufferEnabled,
+        chg1hExitBuffer: settingsForm.chg1hExitBuffer,
+        chg4hEnabled: settingsForm.chg4hEnabled,
+        chg4hMin: settingsForm.chg4hMin,
+        chg4hMax: settingsForm.chg4hMax,
         dcaChg4hMin: settingsForm.dcaChg4hMin,
         dcaChg4hMax: settingsForm.dcaChg4hMax,
-        chg30mExitBuffer: settingsForm.chg30mExitBuffer,
-        chg1hExitBuffer: settingsForm.chg1hExitBuffer,
+        chg4hExitBufferEnabled: settingsForm.chg4hExitBufferEnabled,
         chg4hExitBuffer: settingsForm.chg4hExitBuffer,
+        // DCA re-entry
         dcaReentryMinProfit: settingsForm.dcaReentryMinProfit / 100,
         dcaReentryMaxDrawdown: settingsForm.dcaReentryMaxDrawdown / 100,
-        leverage: settingsForm.leverage,
+        dca2ReentryMinProfit: settingsForm.dca2ReentryMinProfit / 100,
+        dca2ReentryMaxDrawdown: settingsForm.dca2ReentryMaxDrawdown / 100,
+        // Volatility guard
+        dcaSuddenChgGuardEnabled: settingsForm.dcaSuddenChgGuardEnabled,
+        dcaSuddenChgThreshold: settingsForm.dcaSuddenChgThreshold,
+        dcaSuddenChgLookback: settingsForm.dcaSuddenChgLookback,
+        // Telegram
+        telegramChgAlertEnabled: settingsForm.telegramChgAlertEnabled,
+        telegramChgMin: settingsForm.telegramChgMin,
+        telegramChgMax: settingsForm.telegramChgMax,
       }
       console.log("[Bot Settings] Sending payload:", payload)
 
@@ -3222,91 +3389,201 @@ export function MyBotsPage({ initialBotId = null, publicView = false }: { initia
                       </div>
                     </div>
 
+                    {/* ── DCA Core ── */}
                     <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
-                      <p className="mb-3 text-xs font-medium text-foreground">Entry Timeframes</p>
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
-                          <span>30m</span>
-                          <Switch
-                            checked={settingsForm.entry30mEnabled}
-                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry30mEnabled: checked }))}
-                          />
-                        </label>
-                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
-                          <span>1h</span>
-                          <Switch
-                            checked={settingsForm.entry1hEnabled}
-                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry1hEnabled: checked }))}
-                          />
-                        </label>
-                        <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs">
-                          <span>4h</span>
-                          <Switch
-                            checked={settingsForm.entry4hEnabled}
-                            onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, entry4hEnabled: checked }))}
-                          />
-                        </label>
+                      <p className="mb-3 text-xs font-medium text-foreground">DCA Core</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Max DCA Multiplier</label>
+                          <Input type="number" min={1} max={10} step="1" value={settingsForm.maxDcaMultiplier} onChange={(e) => setSettingsForm((prev) => ({ ...prev, maxDcaMultiplier: Number(e.target.value || 1) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Max DCA Orders Open</label>
+                          <Input type="number" min={1} max={20} step="1" value={settingsForm.maxDcaOrdersOpen} onChange={(e) => setSettingsForm((prev) => ({ ...prev, maxDcaOrdersOpen: Number(e.target.value || 1) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Initial Entry Stake Ratio</label>
+                          <Input type="number" min={0.01} max={1} step="0.01" value={settingsForm.initialEntryStakeRatio} onChange={(e) => setSettingsForm((prev) => ({ ...prev, initialEntryStakeRatio: Number(e.target.value || 0.5) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">DCA Entry Stake Ratio</label>
+                          <Input type="number" min={0.01} max={1} step="0.01" value={settingsForm.dcaEntryStakeRatio} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dcaEntryStakeRatio: Number(e.target.value || 0.5) }))} />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-[11px] text-muted-foreground">Shift Lookback</label>
+                          <Input type="number" min={1} max={50} step="1" value={settingsForm.shiftLookback} onChange={(e) => setSettingsForm((prev) => ({ ...prev, shiftLookback: Number(e.target.value || 5) }))} />
+                        </div>
                       </div>
                     </div>
 
+                    {/* ── Entry Timeframes ── */}
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <p className="mb-3 text-xs font-medium text-foreground">Entry Timeframes</p>
+                      {(["5m", "15m", "30m", "1h", "4h"] as const).map((tf) => {
+                        const camel = (suffix: string) => `entry${tf}${suffix}` as keyof typeof settingsForm
+                        return (
+                          <div key={tf} className="mb-3 rounded-lg border border-border p-3">
+                            <p className="mb-2 text-xs font-semibold text-foreground">{tf}</p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              {([
+                                ["Long", "LongEnabled"],
+                                ["Shift Long", "ShiftLongEnabled"],
+                                ["Short", "ShortEnabled"],
+                                ["Shift Short", "ShiftShortEnabled"],
+                              ] as const).map(([label, suffix]) => (
+                                <label key={suffix} className="flex items-center justify-between rounded-lg border border-border px-2 py-1.5 text-[11px]">
+                                  <span>{label}</span>
+                                  <Switch
+                                    checked={settingsForm[camel(suffix)] as boolean}
+                                    onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, [camel(suffix)]: checked }))}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">RSI Long</label>
+                                <Input type="number" min={1} max={99} step="1" value={settingsForm[camel("RsiLong")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [camel("RsiLong")]: Number(e.target.value || 30) }))} />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[11px] text-muted-foreground">RSI Short</label>
+                                <Input type="number" min={1} max={99} step="1" value={settingsForm[camel("RsiShort")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [camel("RsiShort")]: Number(e.target.value || 70) }))} />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* ── Cross-TF RSI (5m → higher TFs) ── */}
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <p className="mb-3 text-xs font-medium text-foreground">Cross-TF RSI (5 min → higher)</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {(["15m", "30m", "1h", "4h"] as const).map((htf) => {
+                          const longKey = `entry5mRsiLong${htf}` as keyof typeof settingsForm
+                          const shortKey = `entry5mRsiShort${htf}` as keyof typeof settingsForm
+                          const longDef = htf === "15m" ? 30 : 40
+                          const shortDef = htf === "15m" ? 70 : 60
+                          return (
+                            <div key={htf} className="space-y-1 rounded-lg border border-border p-2">
+                              <p className="text-[11px] font-semibold text-foreground">→ {htf}</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-0.5">
+                                  <label className="text-[10px] text-muted-foreground">Long</label>
+                                  <Input type="number" min={1} max={99} step="1" value={settingsForm[longKey] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [longKey]: Number(e.target.value || longDef) }))} />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <label className="text-[10px] text-muted-foreground">Short</label>
+                                  <Input type="number" min={1} max={99} step="1" value={settingsForm[shortKey] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [shortKey]: Number(e.target.value || shortDef) }))} />
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* ── 24h Change Filter ── */}
                     <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
                       <div className="mb-3 flex items-center justify-between">
                         <p className="text-xs font-medium text-foreground">24h Change Filter</p>
-                        <Switch
-                          checked={settingsForm.useChgFilter}
-                          onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, useChgFilter: checked }))}
-                        />
+                        <Switch checked={settingsForm.useChgFilter} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, useChgFilter: checked }))} />
+                      </div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-[11px] text-muted-foreground">Global Exit Buffer</p>
+                        <Switch checked={settingsForm.useChgExitBuffer} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, useChgExitBuffer: checked }))} />
                       </div>
 
-                      {settingsForm.entry30mEnabled && (
-                        <div className="mb-4 rounded-lg border border-border p-3">
-                          <p className="mb-2 text-xs font-semibold text-foreground">30m</p>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg30mEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg30mEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg30mMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg30mMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg30mMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg30mExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg30mExitBuffer: Number(event.target.value || 0) }))} /></div>
+                      {(["5m", "15m", "30m", "1h", "4h"] as const).map((tf) => {
+                        const ck = (s: string) => `chg${tf}${s}` as keyof typeof settingsForm
+                        const dk = (s: string) => `dcaChg${tf}${s}` as keyof typeof settingsForm
+                        return (
+                          <div key={tf} className="mb-3 rounded-lg border border-border p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <p className="text-xs font-semibold text-foreground">{tf}</p>
+                              <Switch checked={settingsForm[ck("Enabled")] as boolean} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, [ck("Enabled")]: checked }))} />
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <div className="grid grid-cols-2 items-center gap-2 text-xs">
+                                <span className="col-span-2 text-muted-foreground">Entry bounds (min / max) %</span>
+                                <Input type="number" step="0.1" value={settingsForm[ck("Min")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [ck("Min")]: Number(e.target.value || 0) }))} />
+                                <Input type="number" step="0.1" value={settingsForm[ck("Max")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [ck("Max")]: Number(e.target.value || 0) }))} />
+                              </div>
+                              <div className="grid grid-cols-2 items-center gap-2 text-xs">
+                                <span className="col-span-2 text-muted-foreground">DCA bounds (min / max) %</span>
+                                <Input type="number" step="0.1" value={settingsForm[dk("Min")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [dk("Min")]: Number(e.target.value || 0) }))} />
+                                <Input type="number" step="0.1" value={settingsForm[dk("Max")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [dk("Max")]: Number(e.target.value || 0) }))} />
+                              </div>
+                              <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-[11px]">
+                                <span>Exit Buffer Enabled</span>
+                                <Switch checked={settingsForm[ck("ExitBufferEnabled")] as boolean} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, [ck("ExitBufferEnabled")]: checked }))} />
+                              </label>
+                              <div className="space-y-1 text-xs">
+                                <span className="text-muted-foreground">Exit buffer value</span>
+                                <Input type="number" step="0.1" value={settingsForm[ck("ExitBuffer")] as number} onChange={(e) => setSettingsForm((prev) => ({ ...prev, [ck("ExitBuffer")]: Number(e.target.value || 0) }))} />
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )
+                      })}
 
-                      {settingsForm.entry1hEnabled && (
-                        <div className="mb-4 rounded-lg border border-border p-3">
-                          <p className="mb-2 text-xs font-semibold text-foreground">1h</p>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg1hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg1hEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg1hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg1hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg1hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg1hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg1hExitBuffer: Number(event.target.value || 0) }))} /></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {settingsForm.entry4hEnabled && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="mb-2 text-xs font-semibold text-foreground">4h</p>
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <label className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-xs"><span>Enable per timeframe</span><Switch checked={settingsForm.chg4hEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, chg4hEnabled: checked }))} /></label>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">Entry change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.chg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.chg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="grid grid-cols-2 items-center gap-2 text-xs"><span className="col-span-2 text-muted-foreground">DCA change bounds (min / max) %</span><Input type="number" step="0.1" value={settingsForm.dcaChg4hMin} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMin: Number(event.target.value || 0) }))} /><Input type="number" step="0.1" value={settingsForm.dcaChg4hMax} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaChg4hMax: Number(event.target.value || 0) }))} /></div>
-                            <div className="space-y-1 text-xs"><span className="text-muted-foreground">Exit buffer per timeframe</span><Input type="number" step="0.1" value={settingsForm.chg4hExitBuffer} onChange={(event) => setSettingsForm((prev) => ({ ...prev, chg4hExitBuffer: Number(event.target.value || 0) }))} /></div>
-                          </div>
-                        </div>
-                      )}
-
-                      {!settingsForm.entry30mEnabled && !settingsForm.entry1hEnabled && !settingsForm.entry4hEnabled && (
-                        <p className="text-xs text-muted-foreground">Enable at least one Entry Timeframe to configure change-filter values.</p>
-                      )}
-
-                      <p className="mt-4 mb-2 text-[11px] text-muted-foreground">DCA re-entry window (%)</p>
+                      <p className="mt-4 mb-2 text-[11px] font-medium text-foreground">DCA Re-entry Window (%)</p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
                           <label className="text-[11px] text-muted-foreground">Min Profit %</label>
-                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMinProfit} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMinProfit: Number(event.target.value || 0) }))} />
+                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMinProfit} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dcaReentryMinProfit: Number(e.target.value || 0) }))} />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[11px] text-muted-foreground">Max Drawdown %</label>
-                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMaxDrawdown} onChange={(event) => setSettingsForm((prev) => ({ ...prev, dcaReentryMaxDrawdown: Number(event.target.value || 0) }))} />
+                          <Input type="number" step="0.01" value={settingsForm.dcaReentryMaxDrawdown} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dcaReentryMaxDrawdown: Number(e.target.value || 0) }))} />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 mb-2 text-[11px] font-medium text-foreground">DCA2 Re-entry Window (%)</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Min Profit %</label>
+                          <Input type="number" step="0.01" value={settingsForm.dca2ReentryMinProfit} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dca2ReentryMinProfit: Number(e.target.value || 0) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Max Drawdown %</label>
+                          <Input type="number" step="0.01" value={settingsForm.dca2ReentryMaxDrawdown} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dca2ReentryMaxDrawdown: Number(e.target.value || 0) }))} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Volatility Guard ── */}
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-medium text-foreground">Volatility Guard</p>
+                        <Switch checked={settingsForm.dcaSuddenChgGuardEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, dcaSuddenChgGuardEnabled: checked }))} />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Threshold %</label>
+                          <Input type="number" min={0} step="0.1" value={settingsForm.dcaSuddenChgThreshold} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dcaSuddenChgThreshold: Number(e.target.value || 5) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Lookback (candles)</label>
+                          <Input type="number" min={1} max={100} step="1" value={settingsForm.dcaSuddenChgLookback} onChange={(e) => setSettingsForm((prev) => ({ ...prev, dcaSuddenChgLookback: Number(e.target.value || 10) }))} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Telegram Alerts ── */}
+                    <div className="mt-4 rounded-lg border border-border/70 bg-background/40 p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <p className="text-xs font-medium text-foreground">Telegram CHG Alerts</p>
+                        <Switch checked={settingsForm.telegramChgAlertEnabled} onCheckedChange={(checked) => setSettingsForm((prev) => ({ ...prev, telegramChgAlertEnabled: checked }))} />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Min %</label>
+                          <Input type="number" step="0.1" value={settingsForm.telegramChgMin} onChange={(e) => setSettingsForm((prev) => ({ ...prev, telegramChgMin: Number(e.target.value || -5) }))} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-muted-foreground">Max %</label>
+                          <Input type="number" step="0.1" value={settingsForm.telegramChgMax} onChange={(e) => setSettingsForm((prev) => ({ ...prev, telegramChgMax: Number(e.target.value || 5) }))} />
                         </div>
                       </div>
                     </div>
