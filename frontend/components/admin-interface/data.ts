@@ -264,11 +264,11 @@ export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
     autoRenewDefault: true,
   },
   paymentGateways: {
-    defaultGateway: "stripe",
-    stripeEnabled: true,
-    paypalEnabled: false,
-    razorpayEnabled: false,
-    bankTransferEnabled: false,
+    nowpaymentsEnabled: false,
+    nowpaymentsApiKey: "",
+    nowpaymentsPublicKey: "",
+    nowpaymentsIpnSecret: "",
+    nowpaymentsSandbox: false,
   },
 };
 

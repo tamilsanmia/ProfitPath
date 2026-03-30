@@ -25,33 +25,20 @@ function deny() {
   return NextResponse.json({ error: "Admin access required" }, { status: 403 });
 }
 
-export async function GET() {
-  const user = await getSessionUser();
-  if (!isAdminUser(user)) return deny();
-
-  try {
-    const res = await fetchBackend("/admin/freqtrade/files", { cache: "no-store" });
-    const data = await res.json();
-    return NextResponse.json(data, { status: res.status });
-  } catch {
-    return NextResponse.json({ error: "Failed to list files" }, { status: 502 });
-  }
-}
-
-export async function POST(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const user = await getSessionUser();
   if (!isAdminUser(user)) return deny();
 
   try {
     const body = await req.json();
-    const res = await fetchBackend("/admin/freqtrade/upload", {
-      method: "POST",
+    const res = await fetchBackend("/admin/freqtrade/ssh-key/select", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch {
-    return NextResponse.json({ error: "Upload failed" }, { status: 502 });
+    return NextResponse.json({ error: "Failed to select SSH key" }, { status: 502 });
   }
 }

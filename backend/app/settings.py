@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     freqtrade_deploy_api_port: int = 18080
     freqtrade_default_strategy: str = "BotPrimeX"
 
+    # NOWPayments
+    nowpayments_api_key: str = ""
+    nowpayments_ipn_secret: str = ""
+    nowpayments_sandbox: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="BACKEND_")
 
 

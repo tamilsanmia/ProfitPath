@@ -63,11 +63,11 @@ export type AdminPortalSettings = {
     autoRenewDefault: boolean;
   };
   paymentGateways: {
-    defaultGateway: string;
-    stripeEnabled: boolean;
-    paypalEnabled: boolean;
-    razorpayEnabled: boolean;
-    bankTransferEnabled: boolean;
+    nowpaymentsEnabled: boolean;
+    nowpaymentsApiKey: string;
+    nowpaymentsPublicKey: string;
+    nowpaymentsIpnSecret: string;
+    nowpaymentsSandbox: boolean;
   };
 };
 

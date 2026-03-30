@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrencyFromUsd } from "@/lib/currency-runtime";
 import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
@@ -125,6 +125,14 @@ export function SubscriptionInterface() {
   const [provisioningComplete, setProvisioningComplete] = useState(false);
   const [provisioningBotId, setProvisioningBotId] = useState<string | null>(null);
   const [provisioningError, setProvisioningError] = useState<string | null>(null);
+  const [paymentPhase, setPaymentPhase] = useState<"idle" | "invoice" | "waiting" | "provisioning">("idle");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (tradeType !== "Fixed") {
@@ -157,6 +165,67 @@ export function SubscriptionInterface() {
     setProvisioningComplete(false);
     setProvisioningBotId(null);
     setProvisioningError(null);
+    setPaymentPhase("invoice");
+
+    const subscriptionBody = {
+      exchange,
+      model: tradeType,
+      trade_type: tradeType,
+      dca_mode: dcaMode,
+      stake_amount: tradeType === "Fixed" ? stakeAmount : null,
+      max_open_order: maxOpenOrder,
+      capital_usdt: capital,
+      billing_cycle_days: billingCycleDays,
+      stoploss_pct: stoploss,
+      dca_stoploss_pct: dcaStoploss,
+      leverage: leverage,
+      entry_timeframes: [...enabledTimeframes],
+      setup_charge_usd: setupCharge,
+      monthly_server_fee_usd: monthlyServerFee,
+    };
+
+    try {
+      // Step 1: Create NOWPayments invoice
+      const invoiceRes = await fetch("/api/payments/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          price_amount: totalToday,
+          order_description: `BotPrimeX Bot - ${exchange} ${tradeType} ${capital} USDT`,
+        }),
+      });
+      const invoiceData = (await invoiceRes.json().catch(() => ({}))) as {
+        invoice_url?: string; invoice_id?: string; order_id?: string; error?: string; detail?: string;
+      };
+
+      if (!invoiceRes.ok || !invoiceData.invoice_url) {
+        throw new Error(invoiceData.error || invoiceData.detail || "Failed to create payment invoice");
+      }
+
+      // Step 2: Open payment page
+      setPaymentPhase("waiting");
+      window.open(invoiceData.invoice_url, "_blank");
+
+      // Step 3: Wait for user confirmation
+      // User will click "I've Completed Payment" button shown in popup,
+      // which triggers completeAfterPayment below
+
+      // Store invoice/order info for later
+      setSubmitMessage(invoiceData.order_id || null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to create payment";
+      setSubmitError(message);
+      setProvisioningError(message);
+      setPaymentPhase("idle");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const completeAfterPayment = async () => {
+    setIsSubmitting(true);
+    setProvisioningError(null);
+    setPaymentPhase("provisioning");
 
     try {
       const response = await fetch("/api/subscription/complete", {
@@ -188,11 +257,13 @@ export function SubscriptionInterface() {
       setSubmitMessage(payload.message || "Payment done. Redirecting to My Bots...");
       setProvisioningBotId(payload.bot?.id || null);
       setProvisioningComplete(true);
+      setPaymentPhase("idle");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to complete payment";
       setSubmitError(message);
       setProvisioningError(message);
       setProvisioningComplete(false);
+      setPaymentPhase("idle");
     } finally {
       setIsSubmitting(false);
     }
@@ -549,7 +620,53 @@ export function SubscriptionInterface() {
       {provisioningPopupOpen && (
         <div data-name="subscription-provisioning-popup" className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/70 px-4 pb-6 sm:pb-10">
           <div className="w-full max-w-md rounded-2xl border border-[#1e3a5f] bg-[#0b1628] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-            {!provisioningComplete && !provisioningError && (
+
+            {/* Phase: Creating invoice */}
+            {paymentPhase === "invoice" && !provisioningError && (
+              <div className="space-y-4 text-center">
+                <p className="text-base font-semibold text-white">Creating Payment Invoice</p>
+                <p className="text-sm text-slate-300">Preparing your crypto payment...</p>
+                <div className="flex items-center justify-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-blue-300 border-t-transparent" />
+                  <span className="text-sm text-blue-200">Please wait</span>
+                </div>
+              </div>
+            )}
+
+            {/* Phase: Waiting for payment */}
+            {paymentPhase === "waiting" && !provisioningError && (
+              <div className="space-y-4 text-center">
+                <p className="text-base font-semibold text-white">Complete Your Payment</p>
+                <p className="text-sm text-slate-300">
+                  A payment window has been opened. Please complete the crypto payment there.
+                </p>
+                <p className="text-xs text-slate-400">
+                  Once you have completed the payment, click the button below to proceed with bot setup.
+                </p>
+                <div className="flex items-center justify-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
+                  <span className="text-sm text-yellow-200">Waiting for payment confirmation</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={completeAfterPayment}
+                  disabled={isSubmitting}
+                  className="mt-2 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isSubmitting ? "Verifying..." : "I've Completed Payment"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setProvisioningPopupOpen(false); setPaymentPhase("idle"); }}
+                  className="text-xs text-slate-400 hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Phase: Provisioning server */}
+            {paymentPhase === "provisioning" && !provisioningComplete && !provisioningError && (
               <div className="space-y-4 text-center">
                 <p className="text-base font-semibold text-white">Payment Completed</p>
                 <p className="text-sm text-slate-300">Creating your server and deploying bot in demo mode...</p>

@@ -523,6 +523,14 @@ class SubscriptionCompletePayload(BaseModel):
     setup_charge_usd: float
     monthly_server_fee_usd: float = 10.0
     payment_status: str = "paid"
+    payment_id: str | None = None
+
+
+class CreateInvoicePayload(BaseModel):
+    email: EmailStr
+    session_token: str
+    price_amount: float
+    order_description: str = "BotPrimeX Bot Subscription"
 
 
 class ContinueBotSetupPayload(BaseModel):
@@ -1783,6 +1791,16 @@ def _connection_credentials_for_bot(user_id: int, bot_id: str, exchange_key: str
 
 def _default_strategy_code(strategy_name: str) -> str:
     safe_name = re.sub(r"[^A-Za-z0-9_]", "", str(strategy_name or "").strip())
+
+    # Check admin-uploaded strategy templates in storage first
+    if safe_name:
+        storage_path = _FT_STRATEGY_DIR / f"{safe_name}.py"
+        if storage_path.is_file():
+            try:
+                return storage_path.read_text(encoding="utf-8")
+            except OSError:
+                pass
+
     template_path = os.path.join(os.path.dirname(__file__), "strategy_templates", f"{safe_name}.py")
     if safe_name and os.path.isfile(template_path):
         try:
@@ -2510,7 +2528,7 @@ def _split_display_name(name: str) -> tuple[str, str]:
 
 
 def _verify_google_id_token(id_token: str) -> dict:
-    client_id = settings.google_client_id.strip()
+    client_id = _get_deploy_setting("google_client_id") or settings.google_client_id.strip()
     if not client_id:
         raise HTTPException(status_code=503, detail="Google authentication is not configured")
 
@@ -2996,13 +3014,177 @@ def sign_out(payload: TerminateOtherSessionsPayload) -> dict[str, bool]:
     return {"success": True}
 
 
+# ─── NOWPayments helpers ─────────────────────────────────────────────────────
+
+def _get_nowpayments_config() -> dict[str, str]:
+    """Read NOWPayments config from deploy_settings DB, falling back to env settings."""
+    from .database import get_deploy_settings as _get_ds
+    db = _get_ds()
+    return {
+        "api_key": str(db.get("nowpayments_api_key") or settings.nowpayments_api_key or "").strip(),
+        "ipn_secret": str(db.get("nowpayments_ipn_secret") or settings.nowpayments_ipn_secret or "").strip(),
+        "sandbox": str(db.get("nowpayments_sandbox") or settings.nowpayments_sandbox or "").strip().lower() in ("true", "1", "yes"),
+    }
+
+
+def _nowpayments_base_url() -> str:
+    cfg = _get_nowpayments_config()
+    if cfg["sandbox"]:
+        return "https://api-sandbox.nowpayments.io/v1"
+    return "https://api.nowpayments.io/v1"
+
+
+def _nowpayments_api_request(method: str, path: str, body: dict | None = None) -> dict:
+    cfg = _get_nowpayments_config()
+    api_key = cfg["api_key"]
+    if not api_key:
+        raise HTTPException(status_code=503, detail="NOWPayments API key not configured")
+    sandbox = cfg["sandbox"]
+    base = "https://api-sandbox.nowpayments.io/v1" if sandbox else "https://api.nowpayments.io/v1"
+    url = f"{base}{path}"
+    data = json.dumps(body).encode() if body else None
+    req = URLRequest(url, data=data, method=method)
+    req.add_header("x-api-key", api_key)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", "BotPrimeX/1.0")
+    req.add_header("Accept", "application/json")
+    try:
+        with urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except HTTPError as exc:
+        detail = exc.read().decode() if exc.fp else str(exc)
+        raise HTTPException(status_code=exc.code or 502, detail=f"NOWPayments error: {detail}") from exc
+    except URLError as exc:
+        raise HTTPException(status_code=502, detail=f"NOWPayments unreachable: {exc}") from exc
+
+
+def _verify_nowpayments_signature(body_bytes: bytes, sig_header: str) -> bool:
+    cfg = _get_nowpayments_config()
+    ipn_secret = cfg["ipn_secret"]
+    if not ipn_secret:
+        return False
+    try:
+        body_dict = json.loads(body_bytes)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    sorted_body = json.dumps(body_dict, sort_keys=True, separators=(",", ":"))
+    expected = hmac.new(ipn_secret.encode(), sorted_body.encode(), hashlib.sha512).hexdigest()
+    return hmac.compare_digest(expected, sig_header)
+
+
+# ─── NOWPayments endpoints ───────────────────────────────────────────────────
+
+@app.post("/payments/create-invoice")
+def create_nowpayments_invoice(payload: CreateInvoicePayload) -> dict[str, Any]:
+    user = get_user_or_404(str(payload.email))
+    _ = _validate_session_token_for_user(user["id"], payload.session_token)
+
+    if payload.price_amount <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than 0")
+
+    order_id = f"bpx-{uuid4().hex[:12]}"
+    public_url = str(settings.public_base_url).rstrip("/")
+
+    invoice_body = {
+        "price_amount": payload.price_amount,
+        "price_currency": "usd",
+        "order_id": order_id,
+        "order_description": payload.order_description,
+        "ipn_callback_url": f"{public_url}/payments/nowpayments-ipn",
+        "success_url": f"{str(settings.frontend_url).rstrip('/')}/new-bot?payment=success&order_id={order_id}",
+        "cancel_url": f"{str(settings.frontend_url).rstrip('/')}/new-bot?payment=cancelled",
+    }
+
+    result = _nowpayments_api_request("POST", "/invoice", invoice_body)
+    return {
+        "invoice_url": result.get("invoice_url"),
+        "invoice_id": result.get("id"),
+        "order_id": order_id,
+    }
+
+
+@app.get("/payments/status/{payment_id}")
+def get_nowpayments_status(payment_id: str) -> dict[str, Any]:
+    result = _nowpayments_api_request("GET", f"/payment/{payment_id}")
+    return {
+        "payment_id": result.get("payment_id"),
+        "payment_status": result.get("payment_status"),
+        "pay_amount": result.get("pay_amount"),
+        "pay_currency": result.get("pay_currency"),
+        "order_id": result.get("order_id"),
+        "price_amount": result.get("price_amount"),
+        "price_currency": result.get("price_currency"),
+        "actually_paid": result.get("actually_paid"),
+    }
+
+
+@app.post("/payments/nowpayments-ipn")
+async def nowpayments_ipn_webhook(request: Request) -> dict[str, bool]:
+    body_bytes = await request.body()
+    sig_header = request.headers.get("x-nowpayments-sig", "")
+
+    if not _verify_nowpayments_signature(body_bytes, sig_header):
+        raise HTTPException(status_code=403, detail="Invalid IPN signature")
+
+    try:
+        data = json.loads(body_bytes)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    payment_status = str(data.get("payment_status", "")).strip().lower()
+    order_id = str(data.get("order_id", "")).strip()
+    payment_id = str(data.get("payment_id", "")).strip()
+
+    logger.info("NOWPayments IPN: order_id=%s payment_id=%s status=%s", order_id, payment_id, payment_status)
+
+    if payment_status in ("finished", "confirmed") and order_id:
+        try:
+            from app.database import get_pg_connection
+            with get_pg_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE bot_accounts
+                        SET metadata_json = COALESCE(metadata_json, '{}'::jsonb) || %s::jsonb
+                        WHERE metadata_json->>'nowpayments_order_id' = %s
+                        """,
+                        (json.dumps({
+                            "payment_status": "paid",
+                            "nowpayments_payment_id": payment_id,
+                            "nowpayments_payment_status": payment_status,
+                        }), order_id),
+                    )
+                conn.commit()
+        except Exception:
+            logger.exception("Failed to update bot payment status via IPN for order %s", order_id)
+
+    return {"success": True}
+
+
 @app.post("/subscriptions/complete")
 def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any]:
     user = get_user_or_404(str(payload.email))
     _ = _validate_session_token_for_user(user["id"], payload.session_token)
 
-    if payload.payment_status.strip().lower() != "paid":
-        raise HTTPException(status_code=400, detail="Payment not completed")
+    # ── Payment verification ──
+    nowpayments_order_id: str | None = None
+    nowpayments_payment_id: str | None = None
+
+    if payload.payment_id:
+        # Verify via NOWPayments API
+        try:
+            np_status = _nowpayments_api_request("GET", f"/payment/{payload.payment_id}")
+        except HTTPException:
+            raise HTTPException(status_code=402, detail="Unable to verify payment with NOWPayments")
+        np_payment_status = str(np_status.get("payment_status", "")).strip().lower()
+        if np_payment_status not in ("finished", "confirmed", "sending"):
+            raise HTTPException(status_code=402, detail=f"Payment not completed (status: {np_payment_status})")
+        nowpayments_order_id = str(np_status.get("order_id", "")).strip() or None
+        nowpayments_payment_id = str(np_status.get("payment_id", payload.payment_id)).strip()
+    else:
+        # Legacy / admin bypass: trust payment_status field
+        if payload.payment_status.strip().lower() != "paid":
+            raise HTTPException(status_code=400, detail="Payment not completed")
 
     if payload.billing_cycle_days not in {30, 90}:
         raise HTTPException(status_code=400, detail="Invalid billing cycle")
@@ -3048,6 +3230,8 @@ def complete_subscription(payload: SubscriptionCompletePayload) -> dict[str, Any
             metadata_json={
                 "payment_status": "paid",
                 "source": "subscription_checkout",
+                "nowpayments_order_id": nowpayments_order_id,
+                "nowpayments_payment_id": nowpayments_payment_id,
                 "account_type": account_type,
                 "trade_type": trade_type,
                 "strategy_name": strategy_name,
@@ -4371,14 +4555,24 @@ def list_containers(all: bool = False) -> list[dict[str, str]]:
 # Admin – Freqtrade file management
 # ---------------------------------------------------------------------------
 
-_FREQTRADE_BASE = pathlib.Path("/app/freqtrade")
+_FREQTRADE_BASE = pathlib.Path("/app/storage/freqtrade")
 
-_FREQTRADE_FILE_MAP: dict[str, pathlib.Path] = {
-    "strategy": _FREQTRADE_BASE / "user_data" / "strategies" / "BotPrimeX.py",
-    "config": _FREQTRADE_BASE / "user_data" / "config.json",
-    "docker-compose": _FREQTRADE_BASE / "docker-compose.yml",
-    "strategy-template": pathlib.Path("/app/app/strategy_templates/BotPrimeX.py"),
+# Storage subdirectories for each file type
+_FT_STRATEGY_DIR = _FREQTRADE_BASE / "strategies"
+_FT_CONFIG_DIR = _FREQTRADE_BASE / "configs"
+_FT_COMPOSE_DIR = _FREQTRADE_BASE / "compose"
+_FT_TEMPLATE_DIR = pathlib.Path("/app/app/strategy_templates")
+
+# Allowed extensions per category
+_FT_CATEGORIES: dict[str, dict[str, Any]] = {
+    "strategy":  {"dir": _FT_STRATEGY_DIR, "ext": ".py",   "label": "Strategy (.py)"},
+    "config":    {"dir": _FT_CONFIG_DIR,   "ext": ".json", "label": "Config (.json)"},
+    "compose":   {"dir": _FT_COMPOSE_DIR,  "ext": ".yml",  "label": "Docker Compose (.yml)"},
 }
+
+# Ensure storage dirs exist
+for _cat_info in _FT_CATEGORIES.values():
+    _cat_info["dir"].mkdir(parents=True, exist_ok=True)
 
 
 def _ft_file_info(key: str, path: pathlib.Path) -> dict[str, Any]:
@@ -4387,45 +4581,100 @@ def _ft_file_info(key: str, path: pathlib.Path) -> dict[str, Any]:
     return {
         "key": key,
         "path": str(path),
+        "filename": path.name,
         "exists": exists,
         "size": stat.st_size if stat else 0,
         "modified": stat.st_mtime if stat else None,
     }
 
 
+def _ft_get_default(category: str) -> str:
+    """Get the default filename for a category from deploy settings DB."""
+    from .database import get_deploy_settings as _get_ds
+    db = _get_ds()
+    return str(db.get(f"ft_default_{category}", "") or "").strip()
+
+
+def _ft_set_default(category: str, filename: str) -> None:
+    """Set the default filename for a category in deploy settings DB."""
+    from .database import get_deploy_settings as _get_ds, save_deploy_settings as _save_ds
+    db = _get_ds()
+    db[f"ft_default_{category}"] = filename
+    _save_ds(db)
+
+
+def _ft_resolve_file(category: str) -> pathlib.Path | None:
+    """Resolve the default file path for a category. Returns None if not found."""
+    cat = _FT_CATEGORIES.get(category)
+    if not cat:
+        return None
+    default_name = _ft_get_default(category)
+    if default_name:
+        p = cat["dir"] / default_name
+        if p.is_file():
+            return p
+    # Fallback: first file in the directory
+    if cat["dir"].is_dir():
+        for f in sorted(cat["dir"].iterdir()):
+            if f.is_file() and f.suffix == cat["ext"]:
+                return f
+    return None
+
+
 @app.get("/admin/freqtrade/files")
-def admin_ft_list_files() -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for key, path in _FREQTRADE_FILE_MAP.items():
-        results.append(_ft_file_info(key, path))
-    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
-    if strat_dir.is_dir():
-        for f in sorted(strat_dir.iterdir()):
-            if f.is_file() and f.suffix == ".py" and f.name != "BotPrimeX.py":
-                extra_key = f"strategy:{f.name}"
-                results.append(_ft_file_info(extra_key, f))
-    return results
+def admin_ft_list_files() -> dict[str, Any]:
+    """List all uploaded freqtrade files grouped by category with defaults."""
+    result: dict[str, Any] = {}
+    for category, cat_info in _FT_CATEGORIES.items():
+        files: list[dict[str, Any]] = []
+        d: pathlib.Path = cat_info["dir"]
+        ext: str = cat_info["ext"]
+        if d.is_dir():
+            for f in sorted(d.iterdir()):
+                if f.is_file() and f.suffix == ext:
+                    files.append(_ft_file_info(f"{category}:{f.name}", f))
+        default_name = _ft_get_default(category)
+        result[category] = {
+            "label": cat_info["label"],
+            "ext": ext,
+            "files": files,
+            "default": default_name,
+        }
+
+    # Also list strategy templates
+    templates: list[dict[str, Any]] = []
+    if _FT_TEMPLATE_DIR.is_dir():
+        for f in sorted(_FT_TEMPLATE_DIR.iterdir()):
+            if f.is_file() and f.suffix == ".py":
+                templates.append(_ft_file_info(f"template:{f.name}", f))
+    result["template"] = {
+        "label": "Strategy Templates",
+        "ext": ".py",
+        "files": templates,
+        "default": "",
+    }
+    return result
 
 
 @app.get("/admin/freqtrade/files/{file_key:path}")
 def admin_ft_read_file(file_key: str) -> dict[str, Any]:
-    if file_key.startswith("strategy:"):
-        fname = file_key.split(":", 1)[1]
-        if "/" in fname or "\\" in fname or ".." in fname:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-        path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
-    elif file_key in _FREQTRADE_FILE_MAP:
-        path = _FREQTRADE_FILE_MAP[file_key]
+    parts = file_key.split(":", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail=f"Invalid file key format: {file_key}")
+    category, fname = parts
+    if "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if category == "template":
+        path = _FT_TEMPLATE_DIR / fname
+    elif category in _FT_CATEGORIES:
+        path = _FT_CATEGORIES[category]["dir"] / fname
     else:
-        raise HTTPException(status_code=404, detail=f"Unknown file key: {file_key}")
+        raise HTTPException(status_code=404, detail=f"Unknown category: {category}")
     if not path.is_file():
-        raise HTTPException(status_code=404, detail=f"File not found: {path}")
-    try:
-        content = path.read_text(encoding="utf-8")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Read error: {exc}") from exc
+        raise HTTPException(status_code=404, detail=f"File not found: {fname}")
+    content = path.read_text(encoding="utf-8")
     stat = path.stat()
-    return {"key": file_key, "path": str(path), "content": content, "size": stat.st_size, "modified": stat.st_mtime}
+    return {"key": file_key, "path": str(path), "filename": fname, "content": content, "size": stat.st_size, "modified": stat.st_mtime}
 
 
 class FreqtradeFilePayload(BaseModel):
@@ -4434,55 +4683,93 @@ class FreqtradeFilePayload(BaseModel):
 
 @app.put("/admin/freqtrade/files/{file_key:path}")
 def admin_ft_write_file(file_key: str, payload: FreqtradeFilePayload) -> dict[str, Any]:
-    if file_key.startswith("strategy:"):
-        fname = file_key.split(":", 1)[1]
-        if "/" in fname or "\\" in fname or ".." in fname:
-            raise HTTPException(status_code=400, detail="Invalid filename")
-        path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
-    elif file_key in _FREQTRADE_FILE_MAP:
-        path = _FREQTRADE_FILE_MAP[file_key]
+    parts = file_key.split(":", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail=f"Invalid file key format: {file_key}")
+    category, fname = parts
+    if "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if category == "template":
+        path = _FT_TEMPLATE_DIR / fname
+    elif category in _FT_CATEGORIES:
+        path = _FT_CATEGORIES[category]["dir"] / fname
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown file key: {file_key}")
+        raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        path.write_text(payload.content, encoding="utf-8")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Write error: {exc}") from exc
+    path.write_text(payload.content, encoding="utf-8")
     return {"ok": True, **_ft_file_info(file_key, path)}
 
 
 @app.delete("/admin/freqtrade/files/{file_key:path}")
 def admin_ft_delete_file(file_key: str) -> dict[str, str]:
-    if file_key in ("config", "docker-compose", "strategy", "strategy-template"):
-        raise HTTPException(status_code=403, detail="Core files cannot be deleted")
-    if not file_key.startswith("strategy:"):
-        raise HTTPException(status_code=400, detail="Only extra strategy files can be deleted")
-    fname = file_key.split(":", 1)[1]
+    parts = file_key.split(":", 1)
+    if len(parts) != 2:
+        raise HTTPException(status_code=400, detail=f"Invalid file key format: {file_key}")
+    category, fname = parts
     if "/" in fname or "\\" in fname or ".." in fname:
         raise HTTPException(status_code=400, detail="Invalid filename")
-    path = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+    if category == "template":
+        raise HTTPException(status_code=403, detail="Template files cannot be deleted here")
+    if category not in _FT_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
+    path = _FT_CATEGORIES[category]["dir"] / fname
     if not path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     path.unlink()
+    # Clear default if this was the default
+    if _ft_get_default(category) == fname:
+        _ft_set_default(category, "")
     return {"ok": "deleted", "key": file_key}
 
 
-class FreqtradeUploadStrategyPayload(BaseModel):
+class FreqtradeUploadPayload(BaseModel):
     filename: str
     content: str
+    category: str  # "strategy", "config", "compose"
 
 
-@app.post("/admin/freqtrade/strategies/upload")
-def admin_ft_upload_strategy(payload: FreqtradeUploadStrategyPayload) -> dict[str, Any]:
+@app.post("/admin/freqtrade/upload")
+def admin_ft_upload_file(payload: FreqtradeUploadPayload) -> dict[str, Any]:
+    """Upload a freqtrade file (.py strategy, .json config, or .yml compose)."""
+    category = payload.category.strip()
+    if category not in _FT_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
+    cat_info = _FT_CATEGORIES[category]
     fname = payload.filename.strip()
-    if not fname.endswith(".py") or "/" in fname or "\\" in fname or ".." in fname:
-        raise HTTPException(status_code=400, detail="Invalid strategy filename (must be .py)")
-    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
-    strat_dir.mkdir(parents=True, exist_ok=True)
-    path = strat_dir / fname
+    if "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if not fname.endswith(cat_info["ext"]):
+        raise HTTPException(status_code=400, detail=f"File must end with {cat_info['ext']}")
+    d: pathlib.Path = cat_info["dir"]
+    d.mkdir(parents=True, exist_ok=True)
+    path = d / fname
     path.write_text(payload.content, encoding="utf-8")
-    key = f"strategy:{fname}" if fname != "BotPrimeX.py" else "strategy"
+    key = f"{category}:{fname}"
+    # Auto-set as default if it's the first file in this category
+    existing = [f for f in d.iterdir() if f.is_file() and f.suffix == cat_info["ext"]]
+    if len(existing) == 1:
+        _ft_set_default(category, fname)
     return {"ok": True, **_ft_file_info(key, path)}
+
+
+class FreqtradeSetDefaultPayload(BaseModel):
+    category: str
+    filename: str
+
+
+@app.put("/admin/freqtrade/set-default")
+def admin_ft_set_default(payload: FreqtradeSetDefaultPayload) -> dict[str, Any]:
+    """Set which file is the default for a given category."""
+    category = payload.category.strip()
+    fname = payload.filename.strip()
+    if category not in _FT_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"Unknown category: {category}")
+    if fname:
+        path = _FT_CATEGORIES[category]["dir"] / fname
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail=f"File not found: {fname}")
+    _ft_set_default(category, fname)
+    return {"ok": True, "category": category, "default": fname}
 
 
 # ── Apply freqtrade file changes to all active bots ────────────────────
@@ -4648,16 +4935,16 @@ def admin_ft_apply_to_bots(payload: ApplyToBotsPayload | None = None) -> dict[st
     master_strategy_code = ""
     strategy_filename = ""
     if push_strategy:
-        strat_path = _FREQTRADE_FILE_MAP["strategy"]
-        if strat_path.is_file():
+        strat_path = _ft_resolve_file("strategy")
+        if strat_path and strat_path.is_file():
             master_strategy_code = strat_path.read_text(encoding="utf-8")
             strategy_filename = strat_path.name
 
     # Read master config once if config is in the push list
     master_config: dict[str, Any] = {}
     if push_config:
-        config_path = _FREQTRADE_FILE_MAP["config"]
-        if config_path.is_file():
+        config_path = _ft_resolve_file("config")
+        if config_path and config_path.is_file():
             try:
                 master_config = json.loads(config_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
@@ -4668,14 +4955,15 @@ def admin_ft_apply_to_bots(payload: ApplyToBotsPayload | None = None) -> dict[st
     for key in file_keys:
         if key in ("strategy", "config"):
             continue  # Handled per-bot
-        elif key == "docker-compose":
-            local = _FREQTRADE_FILE_MAP["docker-compose"]
-            files_to_push.append((key, local, "docker-compose.yml"))
-        elif key == "strategy-template":
+        elif key == "docker-compose" or key == "compose":
+            local = _ft_resolve_file("compose")
+            if local and local.is_file():
+                files_to_push.append((key, local, "docker-compose.yml"))
+        elif key == "strategy-template" or key.startswith("template:"):
             continue  # Template only affects new deployments
         elif key.startswith("strategy:"):
             fname = key.split(":", 1)[1]
-            local = _FREQTRADE_BASE / "user_data" / "strategies" / fname
+            local = _FT_STRATEGY_DIR / fname
             if local.is_file():
                 files_to_push.append((key, local, f"user_data/strategies/{fname}"))
 
@@ -4861,7 +5149,45 @@ _DEPLOY_SETTINGS_KEYS: dict[str, str] = {
     "hetzner_image": "BACKEND_HETZNER_IMAGE",
     "hetzner_ssh_keys": "BACKEND_HETZNER_SSH_KEYS",
     "hetzner_root_password": "BACKEND_HETZNER_ROOT_PASSWORD",
+    # NOWPayments
+    "nowpayments_api_key": "BACKEND_NOWPAYMENTS_API_KEY",
+    "nowpayments_ipn_secret": "BACKEND_NOWPAYMENTS_IPN_SECRET",
+    "nowpayments_sandbox": "BACKEND_NOWPAYMENTS_SANDBOX",
+    # Authentication
+    "google_client_id": "BACKEND_GOOGLE_CLIENT_ID",
 }
+
+
+def _get_deploy_setting(key: str) -> str:
+    """Read a single deploy setting from DB, falling back to env/settings."""
+    from .database import get_deploy_settings as _get_ds
+    db = _get_ds()
+    val = str(db.get(key, "") or "").strip()
+    if val:
+        return val
+    # Fallback to settings object (loaded from env at startup)
+    _SETTINGS_ATTR_MAP: dict[str, str] = {
+        "google_client_id": "google_client_id",
+        "deploy_ssh_user": "deploy_ssh_user",
+        "deploy_ssh_port": "deploy_ssh_port",
+        "deploy_ssh_private_key_path": "deploy_ssh_private_key_path",
+        "hetzner_api_token": "hetzner_api_token",
+        "hetzner_datacenter": "hetzner_datacenter",
+        "hetzner_server_type": "hetzner_server_type",
+        "hetzner_image": "hetzner_image",
+        "hetzner_ssh_keys": "hetzner_ssh_keys",
+        "hetzner_root_password": "hetzner_root_password",
+        "deploy_dir": "freqtrade_deploy_dir",
+        "deploy_image": "freqtrade_deploy_image",
+        "deploy_api_port": "freqtrade_deploy_api_port",
+        "usernames": "freqtrade_usernames",
+        "passwords": "freqtrade_passwords",
+        "default_strategy": "freqtrade_default_strategy",
+    }
+    attr = _SETTINGS_ATTR_MAP.get(key)
+    if attr and hasattr(settings, attr):
+        return str(getattr(settings, attr) or "")
+    return ""
 
 
 def _read_env_file() -> dict[str, str]:
@@ -4936,6 +5262,7 @@ def admin_ft_deploy_settings() -> dict[str, Any]:
         "hetzner_image": str(settings.hetzner_image or "ubuntu-22.04"),
         "hetzner_ssh_keys": str(settings.hetzner_ssh_keys or ""),
         "hetzner_root_password": str(settings.hetzner_root_password or ""),
+        "google_client_id": str(settings.google_client_id or ""),
     }
 
     current: dict[str, str] = {}
@@ -4946,19 +5273,17 @@ def admin_ft_deploy_settings() -> dict[str, Any]:
     key_path = str(current.get("deploy_ssh_private_key_path") or settings.deploy_ssh_private_key_path or "").strip()
     ssh_key_exists = bool(key_path and os.path.isfile(key_path))
 
-    # List available strategies from the freqtrade directory
+    # List available strategies from storage
     strategies: list[dict[str, str]] = []
-    strat_dir = _FREQTRADE_BASE / "user_data" / "strategies"
-    if strat_dir.is_dir():
-        for f in sorted(strat_dir.iterdir()):
+    if _FT_STRATEGY_DIR.is_dir():
+        for f in sorted(_FT_STRATEGY_DIR.iterdir()):
             if f.suffix == ".py" and f.is_file():
                 strategies.append({"filename": f.name, "name": f.stem})
 
     # Also list strategy templates
-    template_dir = pathlib.Path("/app/app/strategy_templates")
     templates: list[dict[str, str]] = []
-    if template_dir.is_dir():
-        for f in sorted(template_dir.iterdir()):
+    if _FT_TEMPLATE_DIR.is_dir():
+        for f in sorted(_FT_TEMPLATE_DIR.iterdir()):
             if f.suffix == ".py" and f.is_file():
                 templates.append({"filename": f.name, "name": f.stem})
 
@@ -4981,6 +5306,7 @@ class DeploySettingsPayload(BaseModel):
     hetzner_image: str | None = None
     hetzner_ssh_keys: str | None = None
     hetzner_root_password: str | None = None
+    google_client_id: str | None = None
 
 
 @app.put("/admin/freqtrade/deploy-settings")
@@ -5040,25 +5366,71 @@ class SSHKeyPayload(BaseModel):
     content: str
 
 
+_SSH_KEY_SOURCES: list[dict[str, str]] = [
+    {"id": "custom", "label": "Custom Upload", "path": "/app/storage/deploy_ssh_key"},
+]
+
+
 @app.get("/admin/freqtrade/ssh-key")
 def admin_ft_ssh_key_status() -> dict[str, Any]:
-    key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+    # Read path from DB first, then settings
+    key_path = _get_deploy_setting("deploy_ssh_private_key_path")
     if not key_path:
-        return {"exists": False, "path": "", "size": 0}
-    exists = os.path.isfile(key_path)
+        key_path = str(settings.deploy_ssh_private_key_path or "").strip()
+
+    exists = bool(key_path and os.path.isfile(key_path))
     size = os.path.getsize(key_path) if exists else 0
-    return {"exists": exists, "path": key_path, "size": size}
+
+    # Build available sources with their status
+    sources = []
+    for src in _SSH_KEY_SOURCES:
+        src_exists = os.path.isfile(src["path"])
+        sources.append({
+            "id": src["id"],
+            "label": src["label"],
+            "path": src["path"],
+            "exists": src_exists,
+            "size": os.path.getsize(src["path"]) if src_exists else 0,
+        })
+
+    return {"exists": exists, "path": key_path, "size": size, "sources": sources}
+
+
+class SSHKeySelectPayload(BaseModel):
+    source: str  # "default" or "custom"
+
+
+@app.put("/admin/freqtrade/ssh-key/select")
+def admin_ft_ssh_key_select(payload: SSHKeySelectPayload) -> dict[str, Any]:
+    """Select which SSH key source to use (default Docker secret or custom upload)."""
+    from .database import get_deploy_settings as _get_ds, save_deploy_settings as _save_ds
+
+    source = payload.source.strip()
+    matched = next((s for s in _SSH_KEY_SOURCES if s["id"] == source), None)
+    if not matched:
+        raise HTTPException(status_code=400, detail=f"Unknown SSH key source: {source}")
+
+    key_path = matched["path"]
+    if not os.path.isfile(key_path):
+        raise HTTPException(status_code=400, detail=f"SSH key not found at {key_path}")
+
+    # Save to DB
+    db = _get_ds()
+    db["deploy_ssh_private_key_path"] = key_path
+    _save_ds(db)
+
+    # Also update .env
+    env = _read_env_file()
+    env["BACKEND_DEPLOY_SSH_PRIVATE_KEY_PATH"] = key_path
+    _write_env_file(env)
+
+    return {"ok": True, "path": key_path, "size": os.path.getsize(key_path)}
 
 
 @app.put("/admin/freqtrade/ssh-key")
 def admin_ft_ssh_key_upload(payload: SSHKeyPayload) -> dict[str, Any]:
-    key_path = str(settings.deploy_ssh_private_key_path or "").strip()
-    if not key_path:
-        key_path = "/app/storage/deploy_ssh_key"
-        # Update env file with the new path
-        env = _read_env_file()
-        env["BACKEND_DEPLOY_SSH_PRIVATE_KEY_PATH"] = key_path
-        _write_env_file(env)
+    # Always write uploaded keys to the writable custom path
+    key_path = "/app/storage/deploy_ssh_key"
 
     p = pathlib.Path(key_path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -5073,4 +5445,60 @@ def admin_ft_ssh_key_upload(payload: SSHKeyPayload) -> dict[str, Any]:
 
     p.write_text(content, encoding="utf-8")
     os.chmod(key_path, 0o600)
+
+    # Update deploy_ssh_private_key_path to point to the new custom key
+    from .database import get_deploy_settings as _get_ds, save_deploy_settings as _save_ds
+    db = _get_ds()
+    db["deploy_ssh_private_key_path"] = key_path
+    _save_ds(db)
+
+    env = _read_env_file()
+    env["BACKEND_DEPLOY_SSH_PRIVATE_KEY_PATH"] = key_path
+    _write_env_file(env)
+
     return {"ok": True, "path": key_path, "size": p.stat().st_size}
+
+
+# ── Payment gateway management ──────────────────────────────────────────
+
+class PaymentGatewayPayload(BaseModel):
+    nowpayments_enabled: bool = False
+    nowpayments_api_key: str = ""
+    nowpayments_public_key: str = ""
+    nowpayments_ipn_secret: str = ""
+    nowpayments_sandbox: bool = False
+
+
+@app.get("/admin/payment-gateway")
+def admin_get_payment_gateway() -> dict[str, Any]:
+    from .database import get_deploy_settings as _get_ds
+    db = _get_ds()
+    return {
+        "nowpayments_enabled": str(db.get("nowpayments_enabled", "")).strip().lower() in ("true", "1", "yes"),
+        "nowpayments_api_key": str(db.get("nowpayments_api_key") or ""),
+        "nowpayments_public_key": str(db.get("nowpayments_public_key") or ""),
+        "nowpayments_ipn_secret": str(db.get("nowpayments_ipn_secret") or ""),
+        "nowpayments_sandbox": str(db.get("nowpayments_sandbox", "")).strip().lower() in ("true", "1", "yes"),
+    }
+
+
+@app.put("/admin/payment-gateway")
+def admin_update_payment_gateway(payload: PaymentGatewayPayload) -> dict[str, Any]:
+    from .database import get_deploy_settings as _get_ds, save_deploy_settings as _save_ds
+
+    db = _get_ds()
+    db["nowpayments_enabled"] = str(payload.nowpayments_enabled).lower()
+    db["nowpayments_api_key"] = payload.nowpayments_api_key
+    db["nowpayments_public_key"] = payload.nowpayments_public_key
+    db["nowpayments_ipn_secret"] = payload.nowpayments_ipn_secret
+    db["nowpayments_sandbox"] = str(payload.nowpayments_sandbox).lower()
+    _save_ds(db)
+
+    # Also sync to .env
+    env = _read_env_file()
+    env["BACKEND_NOWPAYMENTS_API_KEY"] = payload.nowpayments_api_key
+    env["BACKEND_NOWPAYMENTS_IPN_SECRET"] = payload.nowpayments_ipn_secret
+    env["BACKEND_NOWPAYMENTS_SANDBOX"] = str(payload.nowpayments_sandbox).lower()
+    _write_env_file(env)
+
+    return {"ok": True}

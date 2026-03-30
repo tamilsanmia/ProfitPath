@@ -54,7 +54,8 @@ export async function POST(request: Request) {
           billing_cycle_days: Number(body?.billing_cycle_days ?? 30),
           setup_charge_usd: Number(body?.setup_charge_usd ?? 0),
           monthly_server_fee_usd: Number(body?.monthly_server_fee_usd ?? 10),
-          payment_status: "paid",
+          payment_status: body?.payment_id ? "paid" : (body?.payment_status ?? "paid"),
+          payment_id: body?.payment_id ?? null,
         }),
         signal: controller.signal,
       });

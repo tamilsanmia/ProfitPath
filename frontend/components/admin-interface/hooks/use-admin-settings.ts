@@ -20,13 +20,17 @@ export function useAdminSettings() {
     async function loadAdminSettings() {
       setIsLoading(true);
       try {
-        const [meResponse, settingsResponse] = await Promise.all([
+        const [meResponse, settingsResponse, pgResponse] = await Promise.all([
           fetch("/api/auth/me", { cache: "no-store" }),
           fetch("/api/settings", { cache: "no-store" }),
+          fetch("/api/admin/payment-gateway", { cache: "no-store" }),
         ]);
 
         const mePayload = (await meResponse.json().catch(() => ({}))) as { user?: SessionUser | null };
         const settingsPayload = (await settingsResponse.json().catch(() => ({}))) as { settings?: Record<string, unknown> };
+        const pgPayload = pgResponse.ok
+          ? ((await pgResponse.json().catch(() => ({}))) as Record<string, unknown>)
+          : {};
 
         if (cancelled) return;
 
@@ -39,6 +43,18 @@ export function useAdminSettings() {
         setSettingsEnvelope(envelope);
 
         const adminPortal = mergeAdminSettings((envelope as Record<string, unknown>).adminPortal);
+
+        // Override paymentGateways from backend payment-gateway endpoint
+        if (pgPayload && typeof pgPayload === "object") {
+          adminPortal.paymentGateways = {
+            nowpaymentsEnabled: Boolean(pgPayload.nowpayments_enabled),
+            nowpaymentsApiKey: String(pgPayload.nowpayments_api_key ?? ""),
+            nowpaymentsPublicKey: String(pgPayload.nowpayments_public_key ?? ""),
+            nowpaymentsIpnSecret: String(pgPayload.nowpayments_ipn_secret ?? ""),
+            nowpaymentsSandbox: Boolean(pgPayload.nowpayments_sandbox),
+          };
+        }
+
         setSettings(adminPortal);
         setOriginalSettings(adminPortal);
         setIsDirty(false);
@@ -112,6 +128,19 @@ export function useAdminSettings() {
       if (!response.ok) {
         throw new Error(String(payload?.error || "Failed to save admin settings"));
       }
+
+      // Sync payment gateway keys to backend
+      await fetch("/api/admin/payment-gateway", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nowpayments_enabled: settings.paymentGateways.nowpaymentsEnabled,
+          nowpayments_api_key: settings.paymentGateways.nowpaymentsApiKey,
+          nowpayments_public_key: settings.paymentGateways.nowpaymentsPublicKey,
+          nowpayments_ipn_secret: settings.paymentGateways.nowpaymentsIpnSecret,
+          nowpayments_sandbox: settings.paymentGateways.nowpaymentsSandbox,
+        }),
+      }).catch(() => {});
 
       const savedEnvelope = payload?.settings && typeof payload.settings === "object"
         ? payload.settings
