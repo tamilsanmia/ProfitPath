@@ -257,6 +257,8 @@ export const DEFAULT_ADMIN_PORTAL_SETTINGS: AdminPortalSettings = {
     invoiceFooter: "Thank you for your business.",
   },
   subscriptions: {
+    monthlyServerFee: 10,
+    setupCharge: 0,
     trialDays: 7,
     gracePeriodDays: 3,
     defaultPlan: "starter",

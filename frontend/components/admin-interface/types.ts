@@ -56,6 +56,8 @@ export type AdminPortalSettings = {
     invoiceFooter: string;
   };
   subscriptions: {
+    monthlyServerFee: number;
+    setupCharge: number;
     trialDays: number;
     gracePeriodDays: number;
     defaultPlan: string;

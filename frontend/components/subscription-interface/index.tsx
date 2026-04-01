@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatCurrencyFromUsd } from "@/lib/currency-runtime";
 import { useCurrencyRealtime } from "@/hooks/use-currency-realtime";
 import { Slider } from "@/components/ui/slider";
@@ -19,7 +19,6 @@ const CAPITAL_MIN = 100;
 const CAPITAL_MAX = 10000;
 const CAPITAL_STEP = 100;
 const BILLING_CYCLES = ["30 Days", "90 Days"] as const;
-const MONTHLY_SERVER_FEE = 10;
 const LEVERAGE_OPTIONS = ["5x", "7x", "10x", "15x"] as const;
 const RECOMMENDED_LEVERAGE = "5x" as const;
 const TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h"] as const;
@@ -101,6 +100,7 @@ export function SubscriptionInterface() {
   useCurrencyRealtime();
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [exchange, setExchange] = useState<(typeof EXCHANGES)[number]>(RECOMMENDED_EXCHANGE);
   const [tradeType, setTradeType] = useState<(typeof TRADE_TYPES)[number]>(RECOMMENDED_TRADE_TYPE);
   const [dcaMode, setDcaMode] = useState<(typeof DCA_OPTIONS)[number]>(RECOMMENDED_DCA_MODE);
@@ -127,6 +127,46 @@ export function SubscriptionInterface() {
   const [provisioningError, setProvisioningError] = useState<string | null>(null);
   const [paymentPhase, setPaymentPhase] = useState<"idle" | "invoice" | "waiting" | "provisioning">("idle");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [adminPricing, setAdminPricing] = useState({ monthlyServerFee: 10, setupCharge: 0 });
+  const [invoiceId, setInvoiceId] = useState<string | null>(null);
+  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [paymentReturnPage, setPaymentReturnPage] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/subscription/pricing", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setAdminPricing(d); })
+      .catch(() => {});
+  }, []);
+
+  // Detect when this tab is the NOWPayments redirect target (?payment=success)
+  useEffect(() => {
+    if (searchParams.get("payment") === "success") {
+      const orderId = searchParams.get("order_id") || "";
+      setPaymentReturnPage(true);
+      // Notify original tab via localStorage
+      try {
+        localStorage.setItem("bpx_payment_success", JSON.stringify({ order_id: orderId, ts: Date.now() }));
+      } catch {}
+      // Clean URL
+      window.history.replaceState({}, "", "/new-bot");
+    }
+  }, [searchParams]);
+
+  // Listen for cross-tab payment confirmation via localStorage
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "bpx_payment_success" && e.newValue && paymentPhase === "waiting") {
+        // Payment confirmed in another tab — stop polling and proceed
+        if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+        try { localStorage.removeItem("bpx_payment_success"); } catch {}
+        completeAfterPayment();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentPhase]);
 
   useEffect(() => {
     return () => {
@@ -144,8 +184,8 @@ export function SubscriptionInterface() {
     setStakeAmount((prev) => Math.min(prev, stakeAmountMax));
   }, [stakeAmountMax]);
 
-  const setupCharge = 0;
-  const monthlyServerFee = MONTHLY_SERVER_FEE;
+  const setupCharge = adminPricing.setupCharge;
+  const monthlyServerFee = adminPricing.monthlyServerFee;
 
   const totalToday = setupCharge + monthlyServerFee;
   const billingCycleDays = billingCycle === "90 Days" ? 90 : 30;
@@ -202,16 +242,29 @@ export function SubscriptionInterface() {
         throw new Error(invoiceData.error || invoiceData.detail || "Failed to create payment invoice");
       }
 
-      // Step 2: Open payment page
+      // Step 2: Open payment page and start polling
       setPaymentPhase("waiting");
+      setInvoiceId(invoiceData.invoice_id || null);
+      setSubmitMessage(invoiceData.order_id || null);
       window.open(invoiceData.invoice_url, "_blank");
 
-      // Step 3: Wait for user confirmation
-      // User will click "I've Completed Payment" button shown in popup,
-      // which triggers completeAfterPayment below
-
-      // Store invoice/order info for later
-      setSubmitMessage(invoiceData.order_id || null);
+      // Step 3: Poll for payment completion every 5 seconds
+      if (invoiceData.invoice_id) {
+        const invId = invoiceData.invoice_id;
+        pollRef.current = setInterval(async () => {
+          try {
+            const res = await fetch(`/api/payments/invoice-status/${encodeURIComponent(invId)}`, { cache: "no-store" });
+            if (!res.ok) return;
+            const status = (await res.json()) as { paid?: boolean; payment_status?: string; payment_id?: string };
+            if (status.paid && status.payment_id) {
+              // Payment confirmed — stop polling and auto-proceed
+              if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+              setPaymentId(status.payment_id);
+              completeAfterPayment(status.payment_id);
+            }
+          } catch { /* ignore polling errors */ }
+        }, 5000);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create payment";
       setSubmitError(message);
@@ -222,10 +275,15 @@ export function SubscriptionInterface() {
     }
   };
 
-  const completeAfterPayment = async () => {
+  const completeAfterPayment = async (confirmedPaymentId?: string) => {
+    // Stop any active polling
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+
     setIsSubmitting(true);
     setProvisioningError(null);
     setPaymentPhase("provisioning");
+
+    const pid = confirmedPaymentId || paymentId;
 
     try {
       const response = await fetch("/api/subscription/complete", {
@@ -246,6 +304,7 @@ export function SubscriptionInterface() {
           entry_timeframes: [...enabledTimeframes],
           setup_charge_usd: setupCharge,
           monthly_server_fee_usd: monthlyServerFee,
+          ...(pid ? { payment_id: pid } : {}),
         }),
       });
 
@@ -258,6 +317,14 @@ export function SubscriptionInterface() {
       setProvisioningBotId(payload.bot?.id || null);
       setProvisioningComplete(true);
       setPaymentPhase("idle");
+
+      // Auto-redirect to my-bots page after success
+      setTimeout(() => {
+        const nextUrl = payload.bot?.id
+          ? `/my-bots?payment=done&bot=${encodeURIComponent(payload.bot.id)}`
+          : "/my-bots?payment=done";
+        router.push(nextUrl);
+      }, 2000);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to complete payment";
       setSubmitError(message);
@@ -275,6 +342,22 @@ export function SubscriptionInterface() {
       : "/my-bots?payment=done";
     router.push(nextUrl);
   };
+
+  // If this tab was opened by NOWPayments redirect, show a simple confirmation
+  if (paymentReturnPage) {
+    return (
+      <div data-name="subscription-interface" className="flex min-h-[60vh] items-center justify-center text-white">
+        <div className="max-w-md rounded-2xl border border-emerald-500/30 bg-[#0b1628] p-8 text-center shadow-lg">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/20">
+            <svg className="h-7 w-7 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          </div>
+          <p className="text-lg font-semibold text-emerald-300">Payment Confirmed!</p>
+          <p className="mt-2 text-sm text-slate-300">Your payment has been received. You can close this tab.</p>
+          <p className="mt-1 text-xs text-slate-500">Your bot is being set up in the original tab.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-name="subscription-interface" className="min-h-screen text-white">
@@ -641,23 +724,15 @@ export function SubscriptionInterface() {
                   A payment window has been opened. Please complete the crypto payment there.
                 </p>
                 <p className="text-xs text-slate-400">
-                  Once you have completed the payment, click the button below to proceed with bot setup.
+                  We are automatically checking for your payment. This page will proceed once confirmed.
                 </p>
                 <div className="flex items-center justify-center gap-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
-                  <span className="text-sm text-yellow-200">Waiting for payment confirmation</span>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-yellow-300 border-t-transparent" />
+                  <span className="text-sm text-yellow-200">Checking for payment...</span>
                 </div>
                 <button
                   type="button"
-                  onClick={completeAfterPayment}
-                  disabled={isSubmitting}
-                  className="mt-2 w-full rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isSubmitting ? "Verifying..." : "I've Completed Payment"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setProvisioningPopupOpen(false); setPaymentPhase("idle"); }}
+                  onClick={() => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setProvisioningPopupOpen(false); setPaymentPhase("idle"); }}
                   className="text-xs text-slate-400 hover:text-slate-200"
                 >
                   Cancel
@@ -679,24 +754,15 @@ export function SubscriptionInterface() {
             )}
 
             {provisioningComplete && !provisioningError && (
-              <div className="space-y-4">
-                <p className="text-base font-semibold text-emerald-300">Server Created And Bot Deployed</p>
-                <p className="text-sm text-slate-300">Your bot is ready in demo mode. You can now open bot details.</p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleViewBotDetails}
-                    className="w-full rounded-xl bg-[#4a67ff] py-2.5 text-sm font-semibold text-white hover:bg-[#5771ff]"
-                  >
-                    View Bot Details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProvisioningPopupOpen(false)}
-                    className="rounded-xl border border-[#2a4f7f] px-4 py-2.5 text-sm text-slate-200 hover:border-blue-400"
-                  >
-                    Close
-                  </button>
+              <div className="space-y-4 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/20">
+                  <svg className="h-6 w-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <p className="text-base font-semibold text-emerald-300">Bot Created Successfully!</p>
+                <p className="text-sm text-slate-300">Redirecting to My Bots...</p>
+                <div className="flex items-center justify-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-emerald-300 border-t-transparent" />
+                  <span className="text-sm text-emerald-200">Redirecting...</span>
                 </div>
               </div>
             )}

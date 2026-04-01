@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { SubscriptionInterface } from "@/components/subscription-interface/index";
 
 export const metadata = {
@@ -8,7 +9,9 @@ export const metadata = {
 export default function NewBotPage() {
   return (
     <section data-name="page-dashboard-new-bot">
-      <SubscriptionInterface />
+      <Suspense>
+        <SubscriptionInterface />
+      </Suspense>
     </section>
   );
 }

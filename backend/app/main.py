@@ -3118,6 +3118,29 @@ def get_nowpayments_status(payment_id: str) -> dict[str, Any]:
     }
 
 
+@app.get("/payments/invoice-status/{invoice_id}")
+def get_nowpayments_invoice_status(invoice_id: str) -> dict[str, Any]:
+    """Check if an invoice has been paid by listing its payments."""
+    try:
+        result = _nowpayments_api_request("GET", f"/invoice-payment/{invoice_id}")
+    except HTTPException:
+        return {"paid": False, "payment_status": "waiting", "payment_id": None}
+    # result is a list of payment objects or has a "result" key with the list
+    payments = result if isinstance(result, list) else result.get("result", [])
+    if not isinstance(payments, list):
+        payments = []
+    for p in payments:
+        status = str(p.get("payment_status", "")).lower()
+        if status in ("finished", "confirmed", "sending", "partially_paid"):
+            return {
+                "paid": status in ("finished", "confirmed"),
+                "payment_status": status,
+                "payment_id": str(p.get("payment_id", "")),
+                "actually_paid": p.get("actually_paid"),
+            }
+    return {"paid": False, "payment_status": "waiting", "payment_id": None}
+
+
 @app.post("/payments/nowpayments-ipn")
 async def nowpayments_ipn_webhook(request: Request) -> dict[str, bool]:
     body_bytes = await request.body()
@@ -4261,6 +4284,31 @@ def post_referral_invitations(payload: ReferralInvitationsPayload) -> dict[str, 
 
     created = create_referrals(user["id"], unique_emails)
     return {"created": len(created)}
+
+
+@app.get("/subscription/pricing")
+def get_subscription_pricing(admin_username: str = "") -> dict[str, Any]:
+    """Public endpoint returning admin-configured subscription pricing."""
+    username = admin_username.strip().lower()
+    if not username:
+        return {"monthlyServerFee": 10, "setupCharge": 0}
+    admin_user = get_user_by_username(username)
+    if not admin_user:
+        return {"monthlyServerFee": 10, "setupCharge": 0}
+    settings_payload = get_user_settings(admin_user["id"]) or {}
+    admin_portal = settings_payload.get("adminPortal") if isinstance(settings_payload.get("adminPortal"), dict) else {}
+    subs = admin_portal.get("subscriptions") if isinstance(admin_portal.get("subscriptions"), dict) else {}
+    monthly_fee = subs.get("monthlyServerFee", 10)
+    setup_charge = subs.get("setupCharge", 0)
+    try:
+        monthly_fee = float(monthly_fee)
+    except (TypeError, ValueError):
+        monthly_fee = 10
+    try:
+        setup_charge = float(setup_charge)
+    except (TypeError, ValueError):
+        setup_charge = 0
+    return {"monthlyServerFee": monthly_fee, "setupCharge": setup_charge}
 
 
 @app.get("/settings")
